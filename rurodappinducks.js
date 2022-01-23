@@ -173,6 +173,7 @@ async function currentBlock(){
 		}else if (typeof window.ethereum !== 'undefined' || (typeof window.web3 !== 'undefined')) {
 			
 			if (window.ethereum) { // for modern DApps browser
+				ethereum = window.ethereum;
 				window.web3 = new Web3(ethereum);
 			}else if (window.web3) { // for old DApps browser
 				window.web3 = new Web3(web3.currentProvider);
