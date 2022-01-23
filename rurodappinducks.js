@@ -166,24 +166,31 @@ function chainCheck(){
 }
 
 async function currentBlock(){
+	if (typeof window.ethereum == 'undefined' || (typeof window.web3 == 'undefined')) {
 	
-	if (window.ethereum) { // for modern DApps browser
-		window.web3 = new Web3(ethereum);
-	}else if (web3) { // for old DApps browser
-		window.web3 = new Web3(web3.currentProvider);
+			swal({title: "Hold on!",type: "error",confirmButtonColor: "#F27474",text: "Non-Ethereum browser. Update to Web3 browser"});
+
+		}else if (typeof window.ethereum !== 'undefined' || (typeof window.web3 !== 'undefined')) {
+			
+			if (window.ethereum) { // for modern DApps browser
+				window.web3 = new Web3(ethereum);
+			}else if (web3) { // for old DApps browser
+				window.web3 = new Web3(web3.currentProvider);
+			}
+			//Wait for nothing
+			try{			
+				//get blocknumber regardless if logged in or not, unlocked or not
+				await window.web3.eth.getBlockNumber().then(block => {
+				document.getElementById("blocknumber").innerHTML = '<a href="https://etherscan.io/block/'+block+'" target="_blank">'+block+'</a>';
+				});
+			} catch (error) {//close try/catch
+				console.error(error);
+				swal({title: "Offline",type: "error",confirmButtonColor: "#F27474",text: error});
+				//change dot color
+				$(".dot").css({'background-color': '#ec0624'});
+			}	
+		}
 	}
-	//Wait for nothing
-	try{			
-		//get blocknumber regardless if logged in or not, unlocked or not
-		await window.web3.eth.getBlockNumber().then(block => {
-		document.getElementById("blocknumber").innerHTML = '<a href="https://etherscan.io/block/'+block+'" target="_blank">'+block+'</a>';
-		});
-	} catch (error) {//close try/catch
-		console.error(error);
-		swal({title: "Offline",type: "error",confirmButtonColor: "#F27474",text: error});
-		//change dot color
-		$(".dot").css({'background-color': '#ec0624'});
-	}	
 }
 
 function walletCheck(disconnected){
@@ -259,9 +266,9 @@ async function walletCheckProceed() {
 								 //change dot color
 								 $(".dot").css({'background-color': 'rgb(39, 174, 96)'});
 								 //update wallet address, privatize it first
-								 var first = account.substring(0, 8);//get first chars
-								 var last = account.slice(account.length - 4);//get last chars
-								 var privatize = first+'....'+last;
+								 var first = account.substring(0, 6);//get first chars
+								 var last = account.slice(account.length - 3);//get last chars
+								 var privatize = first+'...'+last;
 								 document.getElementById("wallet_id").innerHTML = privatize;
 							  }
 							  else {
