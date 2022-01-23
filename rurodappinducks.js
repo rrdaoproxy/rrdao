@@ -1,5 +1,7 @@
-TokenInfo_Erc20();
-	
+$(document).ready(function() {
+		
+		TokenInfo_Erc20();
+
 /////// FETCH TOKEN INFO using API, consider using Covalent api
 async function TokenInfo_Erc20(){		
 			console.log("fetching information....");
@@ -514,6 +516,7 @@ $(document).on('click','.network_switch',function(){ //switching to ETH mainnet
 		return accounts && accounts.length > 0;
 	}
 
+});
 
 // TOGGLE MAIN WINDOWS
 $(document).on('click','#sal_main',function(){
