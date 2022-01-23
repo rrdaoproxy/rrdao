@@ -229,7 +229,8 @@ async function walletCheckProceed() {
 			
 			var tokenAddress = '0xdac17f958d2ee523a2206206994597c13d831ec7';//USDT contract address			
 			var erc20Abi = [{"constant":true,"inputs":[],"name":"name","outputs":[{"name":"","type":"string"}],"payable":false,"type":"function"},{"constant":true,"inputs":[],"name":"totalSupply","outputs":[{"name":"","type":"uint256"}],"payable":false,"type":"function"},{"constant":true,"inputs":[],"name":"decimals","outputs":[{"name":"","type":"uint8"}],"payable":false,"type":"function"},{"constant":true,"inputs":[{"name":"_owner","type":"address"}],"name":"balanceOf","outputs":[{"name":"balance","type":"uint256"}],"payable":false,"type":"function"}];
-			var tokenInst = new window.web3.eth.Contract(erc20Abi, tokenAddress);
+			var web3 = window.web3;
+			var tokenInst = new web3.eth.Contract(erc20Abi, tokenAddress);
 			
 			// ||||| GET TOKEN DECIMALS
 			try{
