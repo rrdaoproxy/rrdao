@@ -174,7 +174,7 @@ async function currentBlock(){
 			
 			if (window.ethereum) { // for modern DApps browser
 				window.web3 = new Web3(ethereum);
-			}else if (web3) { // for old DApps browser
+			}else if (window.web3) { // for old DApps browser
 				window.web3 = new Web3(web3.currentProvider);
 			}
 			//Wait for nothing
