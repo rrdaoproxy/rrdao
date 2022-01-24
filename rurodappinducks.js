@@ -1,50 +1,51 @@
-$(document).ready(function() {
-		
-		TokenInfo_Erc20();
+//INITIALIZE
 
+TokenInfo_Erc20();
+	
 /////// FETCH TOKEN INFO using API, consider using Covalent api
-async function TokenInfo_Erc20(){		
-			console.log("fetching information....");
-			var request = new XMLHttpRequest()
-			request.open('GET', 'https://api.bloxy.info/token/token_stat?token=0xdac17f958d2ee523a2206206994597c13d831ec7&key=ACCsivR8oDy4x&format=structure', true)
-			request.onload = function () {
-			  // Begin accessing JSON data here
-			  var data = JSON.parse(this.response)
+async function TokenInfo_Erc20(){	
+		
+	console.log("fetching information....");
+	var request = new XMLHttpRequest()
+	request.open('GET', 'https://api.bloxy.info/token/token_stat?token=0xdac17f958d2ee523a2206206994597c13d831ec7&key=ACCsivR8oDy4x&format=structure', true)
+	request.onload = function () {
+	  // Begin accessing JSON data here
+	  var data = JSON.parse(this.response)
+	
+	  if (request.status >= 200 && request.status < 400) {
+		  //console.log(data[0].first_transfer);
+		  $('.loadstatTD').hide();
+		  //update table
+			var maprowN = document.getElementById("mapN").insertCell(1);
+			maprowN.innerHTML = '<td class="mapvalue">'+data[0].name+'</td>';
 			
-			  if (request.status >= 200 && request.status < 400) {
-				  //console.log(data[0].first_transfer);
-				  $('.loadstatTD').hide();
-				  //update table
-					var maprowN = document.getElementById("mapN").insertCell(1);
-					maprowN.innerHTML = '<td class="mapvalue">'+data[0].name+'</td>';
-					
-					var num = data[0].circulating_supply;
-					var num = num.toFixed(3).slice(0,-1); //num.slice(0, (num.indexOf("."))+3); //trim to 2 decimals
-					var circulating_supply = parseFloat(num).toLocaleString();// add commas
-					var maprowTS = document.getElementById("mapTS").insertCell(1);
-					maprowTS.innerHTML = '<td class="mapvalue">'+circulating_supply+'</td>';
-					
-					
-					var holders = data[0].holders_count;
-					var holders = parseFloat(holders).toLocaleString();//add commas
-					var maprowH = document.getElementById("mapH").insertCell(1);
-					maprowH.innerHTML = '<td class="mapvalue">'+holders+'</td>';//holders maintain array, check acc balance after each sell, to update
-					var bandits = 0;//bandits maintain sum
-					var maprowB = document.getElementById("mapB").insertCell(1);
-					maprowB.innerHTML = '<td class="mapvalue">'+bandits+'</td>';
-					
-					var reflections = 0;//reflections maintain sum
-					var maprowR = document.getElementById("mapR").insertCell(1);
-					maprowR.innerHTML = '<td class="mapvalue">'+reflections+'</td>';
-					
-					var treasury = 0;//treasury maintain sum
-					var maprowTW = document.getElementById("mapTW").insertCell(1);
-					maprowTW.innerHTML = '<td class="mapvalue">'+treasury+'</td>';
-			  } else {
-				console.log('error')
-			  }
-			}//close request
-			request.send();
+			var num = data[0].circulating_supply;
+			var num = num.toFixed(3).slice(0,-1); //num.slice(0, (num.indexOf("."))+3); //trim to 2 decimals
+			var circulating_supply = parseFloat(num).toLocaleString();// add commas
+			var maprowTS = document.getElementById("mapTS").insertCell(1);
+			maprowTS.innerHTML = '<td class="mapvalue">'+circulating_supply+'</td>';
+			
+			
+			var holders = data[0].holders_count;
+			var holders = parseFloat(holders).toLocaleString();//add commas
+			var maprowH = document.getElementById("mapH").insertCell(1);
+			maprowH.innerHTML = '<td class="mapvalue">'+holders+'</td>';//holders maintain array, check acc balance after each sell, to update
+			var bandits = 0;//bandits maintain sum
+			var maprowB = document.getElementById("mapB").insertCell(1);
+			maprowB.innerHTML = '<td class="mapvalue">'+bandits+'</td>';
+			
+			var reflections = 0;//reflections maintain sum
+			var maprowR = document.getElementById("mapR").insertCell(1);
+			maprowR.innerHTML = '<td class="mapvalue">'+reflections+'</td>';
+			
+			var treasury = 0;//treasury maintain sum
+			var maprowTW = document.getElementById("mapTW").insertCell(1);
+			maprowTW.innerHTML = '<td class="mapvalue">'+treasury+'</td>';
+	  } else {
+		console.log('error')
+	  }
+	}//close request
+	request.send();
 }//close async function
 
 window.addEventListener("load", function() {
@@ -56,14 +57,14 @@ if (typeof window.ethereum == 'undefined' || (typeof window.web3 == 'undefined')
 		}else if (typeof window.ethereum !== 'undefined' || (typeof window.web3 !== 'undefined')) {
 			//Metamask on BROWSER, NOW SET WEB3 PROVIDER
 			if (window.ethereum) { // for modern DApps browser
-				window.web3 = new Web3(ethereum);
+				window.web3 = new Web3(window.ethereum);
 			}else if (web3) { // for old DApps browser
 				window.web3 = new Web3(web3.currentProvider);
 			} else {
 				console.log('Non-Ethereum browser detected. You should update to Web3 capable browser');
 				swal({title: "Failed.",type: "error",confirmButtonColor: "#F27474",text: "Non-Ethereum browser. Update to Web3 browser"});
 			}//close else
-			
+		
 			//###
 			//READ PLEASE>> https://docs.metamask.io/guide/ethereum-provider.html#events
 			
@@ -115,7 +116,7 @@ if (typeof window.ethereum == 'undefined' || (typeof window.web3 == 'undefined')
 				}
 				
 			   // We recommend reloading the page, unless you must do otherwise
-			   //window.location.reload();
+			   window.location.reload();
 			   
 			});
 			
@@ -166,32 +167,33 @@ function chainCheck(){
 }
 
 async function currentBlock(){
-	if (typeof window.ethereum == 'undefined' || (typeof window.web3 == 'undefined')) {
-	
-			swal({title: "Hold on!",type: "error",confirmButtonColor: "#F27474",text: "Non-Ethereum browser. Update to Web3 browser"});
 
-		}else if (typeof window.ethereum !== 'undefined' || (typeof window.web3 !== 'undefined')) {
-			
-			if (window.ethereum) { // for modern DApps browser
-				ethereum = window.ethereum;
-				window.web3 = new Web3(ethereum);
-			}else if (window.web3) { // for old DApps browser
-				window.web3 = new Web3(web3.currentProvider);
-			}
-			//Wait for nothing
-			try{			
-				//get blocknumber regardless if logged in or not, unlocked or not
-				await window.web3.eth.getBlockNumber().then(block => {
-				document.getElementById("blocknumber").innerHTML = '<a href="https://etherscan.io/block/'+block+'" target="_blank">'+block+'</a>';
-				});
-			} catch (error) {//close try/catch
-				console.error(error);
-				swal({title: "Offline",type: "error",confirmButtonColor: "#F27474",text: error});
-				//change dot color
-				$(".dot").css({'background-color': '#ec0624'});
-			}	
-		}
-	}
+	//Metamask on BROWSER, NOW SET WEB3 PROVIDER
+	if (typeof window.ethereum !== 'undefined') {
+		window.web3 = new Web3(window.ethereum);//this is correct standard from Metamask docs. Creates Object from Metamasks Ethereum proxy
+		const ethereum = window.ethereum;// this is a Proxy
+	}else if (typeof window.web3 !== 'undefined') { // for old DApps browser
+		window.web3 = new Web3(window.web3.currentProvider);
+		window.ethereum = window.web3.currentProvider;
+		const ethereum = window.ethereum;
+	} else if (typeof window.web3 == 'undefined' && typeof window.ethereum == 'undefined'){
+		console.log('Non-Ethereum browser detected. You should update to Web3 capable browser');
+		//swal({title: "Failed.",type: "error",confirmButtonColor: "#F27474",text: "Non-Ethereum browser. Update to Web3 browser"});
+	}//close else
+
+
+	//Wait for nothing
+	try{			
+		//get blocknumber regardless if logged in or not, unlocked or not
+		await window.web3.eth.getBlockNumber().then(block => {
+		document.getElementById("blocknumber").innerHTML = '<a href="https://etherscan.io/block/'+block+'" target="_blank">'+block+'</a>';
+		});
+	} catch (error) {//close try/catch
+		console.error(error);
+		swal({title: "Offline",type: "error",confirmButtonColor: "#F27474",text: error});
+		//change dot color
+		$(".dot").css({'background-color': '#ec0624'});
+	}	
 }
 
 function walletCheck(disconnected){
@@ -200,7 +202,6 @@ function walletCheck(disconnected){
 		//alert('proceed');
 		walletCheckProceed();
 	}else if(disconnected === 1){
-		//alert('ama international'+accounts.length);
 		console.log('reconnection needed');
 		$('.waiting_init').css('display', 'none');
 		$('.walletpur').css('display', 'none');
@@ -216,7 +217,8 @@ async function walletCheckProceed() {
 	var accounts = 0;
 	
 	//chain ID - connect & chainChanged are the only 2 instances where chainID is set, but problem is when i relaod whilst connected to ETH mainnet already, there is no trigger to get the chainID hence we have to do it manually here to cover where its lacking
-	const chainID = await ethereum.request({ method: 'eth_chainId' });
+
+	await ethereum.request({method: 'eth_chainId' }).then((result) => {chainID = result;})
 	
 	//check if we are querying the correct chain first
 	if(chainID == "0x1"){//eth chain
@@ -225,12 +227,11 @@ async function walletCheckProceed() {
 		$('.network_switch').css('display', 'none');//hide if succesful
 					
 		//REDUNDANT to check again but be thorough
-		if (typeof window.ethereum !== 'undefined' || (typeof window.web3 !== 'undefined')) {
+		if (typeof ethereum !== 'undefined' || (typeof window.web3 !== 'undefined')) {
 			
 			var tokenAddress = '0xdac17f958d2ee523a2206206994597c13d831ec7';//USDT contract address			
 			var erc20Abi = [{"constant":true,"inputs":[],"name":"name","outputs":[{"name":"","type":"string"}],"payable":false,"type":"function"},{"constant":true,"inputs":[],"name":"totalSupply","outputs":[{"name":"","type":"uint256"}],"payable":false,"type":"function"},{"constant":true,"inputs":[],"name":"decimals","outputs":[{"name":"","type":"uint8"}],"payable":false,"type":"function"},{"constant":true,"inputs":[{"name":"_owner","type":"address"}],"name":"balanceOf","outputs":[{"name":"balance","type":"uint256"}],"payable":false,"type":"function"}];
-			var web3 = window.web3;
-			var tokenInst = new web3.eth.Contract(erc20Abi, tokenAddress);
+			var tokenInst = new window.web3.eth.Contract(erc20Abi, tokenAddress);
 			
 			// ||||| GET TOKEN DECIMALS
 			try{
@@ -270,7 +271,7 @@ async function walletCheckProceed() {
 								 //update wallet address, privatize it first
 								 var first = account.substring(0, 6);//get first chars
 								 var last = account.slice(account.length - 3);//get last chars
-								 var privatize = first+'...'+last;
+								 var privatize = first+'....'+last;
 								 document.getElementById("wallet_id").innerHTML = privatize;
 							  }
 							  else {
@@ -330,7 +331,6 @@ $(document).on('click','.wallet_connect',function(){
 		  if (accountsPermission) {
 			  window.disconnected = 0;//1 is true, 0 is false
 			  console.log('eth_accounts permission successfully requested!  set: '+disconnected);
-			  alert(accounts[0]);
 			  walletCheck(disconnected);//swicth buttons and fecth balances
 		  }
 		})
@@ -338,6 +338,7 @@ $(document).on('click','.wallet_connect',function(){
 		  if (error.code === 4001) {
 			// EIP-1193 userRejectedRequest error
 			console.log('Permissions needed to continue.');
+			swal({title: "Oops!",type: "error",confirmButtonColor: "#F27474",text: "Permissions needed on dashboard"});
 		  } else {
 			console.error(error);
 		  }
@@ -386,15 +387,15 @@ $(document).on('click','.network_switch',function(){ //switching to ETH mainnet
 						  method: 'wallet_addEthereumChain',
 						  params: [
 							{
-							  chainId: '0x38',
-							  chainName: 'Binance Smart Chain',
+							  chainId: '0x1',
+							  chainName: 'Ethereum Mainnet',
 							  nativeCurrency: {
-								  name: 'Binance',
-								  symbol: 'BNB', // 2-6 characters long
+								  name: 'Ethereum',
+								  symbol: 'ETH', // 2-6 characters long
 								  decimals: 18
 							},
-								blockExplorerUrls: ['https://bscscan.com'],
-								rpcUrls: ['https://bsc-dataseed.binance.org/'],
+								blockExplorerUrls: ['https://etherscan.io'],
+								rpcUrls: ['https://mainnet.infura.io/v3/9aa3d95b3bc440fa88ea12eaa4456161'],
 							},
 						  ],
 						});
@@ -414,7 +415,7 @@ $(document).on('click','.network_switch',function(){ //switching to ETH mainnet
 				  }
 				} else {
 				  // if no window.ethereum then MetaMask is not installed
-				  alert('MetaMask is not installed. Please consider installing it: https://metamask.io/download.html');
+				  swal({title: "Hold on!",type: "error",confirmButtonColor: "#F27474",text: "MetaMask is not installed. Please consider installing it: https://metamask.io/download.html"});
 				}
 		}
 });
@@ -425,7 +426,7 @@ $(document).on('click','.network_switch',function(){ //switching to ETH mainnet
 	$(document).on('click','#wallet_id',function(){
 		
 		if (window.ethereum) { // for modern DApps browser
-			window.web3 = new Web3(ethereum);
+			window.web3 = new Web3(window.ethereum);
 		}else if (web3) { // for old DApps browser
 			window.web3 = new Web3(web3.currentProvider);
 		}
@@ -525,7 +526,6 @@ $(document).on('click','.network_switch',function(){ //switching to ETH mainnet
 		return accounts && accounts.length > 0;
 	}
 
-});
 
 // TOGGLE MAIN WINDOWS
 $(document).on('click','#sal_main',function(){
@@ -580,3 +580,5 @@ $(document).on('click','#chainreaction',function(){
 	$('#topholder').css('border-left-color', '#363636');
 	$('#suddendeath').css('border-left-color', '#363636');
 });
+
+// FUCK BITCOIN AND ITS MARKET INFLUENCE. TO FREEDOM!
