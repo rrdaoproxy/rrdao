@@ -7,42 +7,69 @@ async function TokenInfo_Erc20(){
 		
 	console.log("fetching information....");
 	var request = new XMLHttpRequest()
-	request.open('GET', 'https://api.bloxy.info/token/token_stat?token=0xdac17f958d2ee523a2206206994597c13d831ec7&key=ACCsivR8oDy4x&format=structure', true)
+	request.open('GET', 'https://api.bloxy.info/token/token_stat?token=0x5b4e9a810321e168989802474f689269ec442681&key=ACCsivR8oDy4x&format=structure', true)
 	request.onload = function () {
 	  // Begin accessing JSON data here
-	  var data = JSON.parse(this.response)
-	
-	  if (request.status >= 200 && request.status < 400) {
-		  //console.log(data[0].first_transfer);
-		  $('.loadstatTD').hide();
-		  //update table
-			var maprowN = document.getElementById("mapN").insertCell(1);
-			maprowN.innerHTML = '<td class="mapvalue">'+data[0].name+'</td>';
+	  var data = JSON.parse(this.response);//create Json Obj
+
+	  if(typeof data[0].first_transfer == "undefined"){// check for error property in response //if(typeof Obj.error == "undefined"){   //if(Obj.hasOwnProperty('error')){		//if(typeof data[0].error){
+		  console.log(data[0]);
+		  console.log('Issue with remote API server. Contact team!');
+		  	//do a text input swal
 			
-			var num = data[0].circulating_supply;
-			var num = num.toFixed(3).slice(0,-1); //num.slice(0, (num.indexOf("."))+3); //trim to 2 decimals
-			var circulating_supply = parseFloat(num).toLocaleString();// add commas
-			var maprowTS = document.getElementById("mapTS").insertCell(1);
-			maprowTS.innerHTML = '<td class="mapvalue">'+circulating_supply+'</td>';
+			swal({
+				title: "Metrics fetch error",
+				text: "Issue with remote API server. Contact team!",
+				html: true,
+				showCancelButton: true,
+				dangerMode: true,
+				confirmButtonText: "try again",
+				cancelButtonText: "cancel",
+				confirmButtonColor: "#F27474",
+				closeOnConfirm: true
+				},function () {//on confirm click
+						console.log('fetch retry...');
+						TokenInfo_Erc20();
+				});//outer swal close
+							
+	  }else{// no error property in response
+	  console.log(data[0]);
+	  		$('.loadstatTD').hide(); //now hide
 			
-			
-			var holders = data[0].holders_count;
-			var holders = parseFloat(holders).toLocaleString();//add commas
-			var maprowH = document.getElementById("mapH").insertCell(1);
-			maprowH.innerHTML = '<td class="mapvalue">'+holders+'</td>';//holders maintain array, check acc balance after each sell, to update
-			var bandits = 0;//bandits maintain sum
-			var maprowB = document.getElementById("mapB").insertCell(1);
-			maprowB.innerHTML = '<td class="mapvalue">'+bandits+'</td>';
-			
-			var reflections = 0;//reflections maintain sum
-			var maprowR = document.getElementById("mapR").insertCell(1);
-			maprowR.innerHTML = '<td class="mapvalue">'+reflections+'</td>';
-			
-			var treasury = 0;//treasury maintain sum
-			var maprowTW = document.getElementById("mapTW").insertCell(1);
-			maprowTW.innerHTML = '<td class="mapvalue">'+treasury+'</td>';
-	  } else {
-		console.log('error')
+		  if (request.status >= 200 && request.status < 400) {//only fails if there is no connection, hence error check of responce message above us
+			  //update contract addy
+				document.getElementById("contr_addy").innerHTML = data[0].address;
+				
+			  //update table
+				var maprowN = document.getElementById("mapN").insertCell(1);
+				maprowN.innerHTML = '<td class="mapvalue">'+data[0].name+' ('+data[0].symbol+')</td>';
+				
+				var supply_raw = data[0].circulating_supply;
+				var supply_raw = supply_raw.toFixed(3).slice(0,-1); //num.slice(0, (num.indexOf("."))+3); //trim to 2 decimals
+				var total_supply = parseFloat(supply_raw).toLocaleString();// add commas
+				var maprowTS = document.getElementById("mapTS").insertCell(1);
+				maprowTS.innerHTML = '<td class="mapvalue">'+total_supply+'</td>';
+				
+				var circ_supply = supply_raw;
+				var circulating_supply = parseFloat(circ_supply).toLocaleString();// add commas
+				var maprowTS = document.getElementById("mapCS").insertCell(1);
+				maprowTS.innerHTML = '<td class="mapvalue">'+circulating_supply+'</td>';
+				
+				var holders = data[0].holders_count;
+				var holders = parseFloat(holders).toLocaleString();//add commas
+				var maprowH = document.getElementById("mapH").insertCell(1);
+				maprowH.innerHTML = '<td class="mapvalue">'+holders+'</td>';//holders maintain array, check acc balance after each sell, to update
+				
+				var reflections = 0;//reflections maintain sum
+				var maprowR = document.getElementById("mapR").insertCell(1);
+				maprowR.innerHTML = '<td class="mapvalue">'+reflections+'</td>';
+				
+				var treasury = 0;//treasury maintain sum
+				var maprowTW = document.getElementById("mapTW").insertCell(1);
+				maprowTW.innerHTML = '<td class="mapvalue">'+treasury+'</td>';
+		  } else {
+			console.log('error')
+		  }
 	  }
 	}//close request
 	request.send();
@@ -92,7 +119,8 @@ if (typeof window.ethereum == 'undefined' || (typeof window.web3 == 'undefined')
 				//1. show account name
 				//2. query account balance
 				AccountBalance(currentAccount);
-				walletCheck();	
+				var disconnected = window.disconnected;
+				walletCheck(disconnected);
 			  }
 		
 			});
@@ -111,7 +139,8 @@ if (typeof window.ethereum == 'undefined' || (typeof window.web3 == 'undefined')
 					$('.network_switch').css('display', 'inline-block');
 				}else if(networkId == "0x1"){
 					//correct network proceed to check if wallet unlocked
-					walletCheck();
+					var disconnected = window.disconnected;
+					walletCheck(disconnected);
 					console.log('reading eth mainnet');
 				}
 				
@@ -331,6 +360,7 @@ $(document).on('click','.wallet_connect',function(){
 		  if (accountsPermission) {
 			  window.disconnected = 0;//1 is true, 0 is false
 			  console.log('eth_accounts permission successfully requested!  set: '+disconnected);
+			  var disconnected = window.disconnected;
 			  walletCheck(disconnected);//swicth buttons and fecth balances
 		  }
 		})
@@ -338,7 +368,23 @@ $(document).on('click','.wallet_connect',function(){
 		  if (error.code === 4001) {
 			// EIP-1193 userRejectedRequest error
 			console.log('Permissions needed to continue.');
-			swal({title: "Oops!",type: "error",confirmButtonColor: "#F27474",text: "Permissions needed on dashboard"});
+			swal({
+				  title: "",
+				  text: "Permissions needed on dashboard..",
+				  type: "info",  //var alertTypes = ['error', 'warning', 'info', 'success', 'input', 'prompt'];
+				  html: false,
+							dangerMode: false,
+							confirmButtonText: "try again",
+							cancelButtonText: "cancel",
+				  showConfirmButton: true,
+				  showCancelButton: true,
+				  timer: 4000,
+				  animation: "slide-from-top"
+				  
+			},function(){//on confirm click
+				console.log('fetch retry...');
+				reqConnect();
+			});//inner swal close
 		  } else {
 			console.error(error);
 		  }
@@ -502,56 +548,69 @@ $(document).on('click','.network_switch',function(){ //switching to ETH mainnet
 		
 		}//close disconnectwallet
 	});//doc.onclick
-	
-	//#############################################
-	//DISCONNECT : ACTUAL SESSION ENDING
-	$(document).on('click','#discon',function(){
-		LockUp();
-	});
-	
-	//ON LOCK ACCOUNT CLICK
-	async function LockUp(){
-		console.log(accounts.length);
-		accounts = [];//remove all accounts from dom. wait for reinitialise
-		console.log(accounts.length);
-		window.disconnected = 1;
-		
-		//fire wallet check to flash out address in elements
-		walletCheck();
-	}//async function close
 
-	async function isMetaMaskConnected() {
-		const {ethereum} = window;
-		const accounts = await ethereum.request({method: 'eth_accounts'});
-		return accounts && accounts.length > 0;
-	}
+//Copy Contract Addy
+function CopyToClipboard(id){
+    var r = document.createRange();
+    r.selectNode(document.getElementById(id));
+    window.getSelection().removeAllRanges();
+    window.getSelection().addRange(r);
+    try {
+        document.execCommand('copy');
+        window.getSelection().removeAllRanges();
+        console.log('Address copied! ' + r);
+    } catch (err) {
+        console.log('Unable to copy!');
+    }
+}
+//DISCONNECT : ACTUAL SESSION ENDING
+$(document).on('click','#discon',function(){
+	LockUp();
+});
 
+//ON LOCK ACCOUNT CLICK
+async function LockUp(){
+	console.log(accounts.length);
+	accounts = [];//remove all accounts from dom. wait for reinitialise
+	console.log(accounts.length);
+	window.disconnected = 1;
+	
+	//fire wallet check to flash out address in elements
+	var disconnected = window.disconnected;
+	walletCheck(disconnected);
+}//async function close
+
+async function isMetaMaskConnected() {
+	const {ethereum} = window;
+	const accounts = await ethereum.request({method: 'eth_accounts'});
+	return accounts && accounts.length > 0;
+}
 
 // TOGGLE MAIN WINDOWS
 $(document).on('click','#sal_main',function(){
 	$('#saloon_win').css('display', 'none');
 	$('#main_win').css('display', 'block');
-	$('#sal_main').css('border-color', '#FFF');
-	$('#sal_deriv').css('border-color', '#363636');
-	//toggle navs
-	$('#sal_ul_main').css('display','block');
-	$('#sal_ul_sal').css('display','none');
+	$('#sal_main').css('box-shadow', 'inset 0 0.4px 3px 0 #FFF');
+	$('#sal_deriv').css('box-shadow', 'none');
+	//toggle contract navs
+	$('#sal_ul_main').slideDown(300);
+	$('#sal_ul_sal').slideUp(150);
 	$('#rrofficial').click();
 });
 // TOGGLE SALOON WINDOWS
 $(document).on('click','#sal_deriv',function(){
 	$('#main_win').css('display', 'none');
 	$('#saloon_win').css('display', 'block');
-	$('#sal_deriv').css('border-color', '#FFF');
-	$('#sal_main').css('border-color', '#363636');
-	//toggle navs
-	$('#sal_ul_main').css('display','none');
-	$('#sal_ul_sal').css('display','block');
+	$('#sal_deriv').css('box-shadow', 'inset 0 0.4px 3px 0 #FFF');
+	$('#sal_main').css('box-shadow', 'none');
+	//toggle contract navs
+	$('#sal_ul_main').slideUp(150);
+	$('#sal_ul_sal').slideDown(300)
 	$('#suddendeath').click();
 });
 // TOGGLE SALOON CONTRACTS
 $(document).on('click','#rrofficial',function(){
-	$('#rrofficial').css('border-left-color', '#781310');
+	$('#rrofficial').css('border-left-color', '#683c2c');
 	$('#suddendeath').css('border-left-color', '#363636');
 	$('#chainreaction').css('border-left-color', '#363636');
 	$('#topholder').css('border-left-color', '#363636');
@@ -560,7 +619,7 @@ $(document).on('click','#suddendeath',function(){
 	$('#screvealer1').css('display', 'block');
 	$('#screvealer2').css('display', 'none');
 	$('#screvealer3').css('display', 'none');
-	$('#suddendeath').css('border-left-color', '#781310');
+	$('#suddendeath').css('border-left-color', '#683c2c');
 	$('#chainreaction').css('border-left-color', '#363636');
 	$('#topholder').css('border-left-color', '#363636');
 });
@@ -568,7 +627,7 @@ $(document).on('click','#topholder',function(){
 	$('#screvealer1').css('display', 'none');
 	$('#screvealer2').css('display', 'block');
 	$('#screvealer3').css('display', 'none');
-	$('#topholder').css('border-left-color', '#781310');
+	$('#topholder').css('border-left-color', '#683c2c');
 	$('#suddendeath').css('border-left-color', '#363636');
 	$('#chainreaction').css('border-left-color', '#363636');
 });
@@ -576,9 +635,35 @@ $(document).on('click','#chainreaction',function(){
 	$('#screvealer1').css('display', 'none');
 	$('#screvealer2').css('display', 'none');
 	$('#screvealer3').css('display', 'block');
-	$('#chainreaction').css('border-left-color', '#781310');
+	$('#chainreaction').css('border-left-color', '#683c2c');
 	$('#topholder').css('border-left-color', '#363636');
 	$('#suddendeath').css('border-left-color', '#363636');
+});
+
+//	SALOON MENU FUNCTIONS
+//	LETS USE SIMPLER STYLING METHOD FOR THE SALOON FUNCTIONS
+$(document).on('click', '.sn_contracts', function(e){
+	$('.windows_shift').css('display', 'none'); //reset window
+	$('#saloon_win').css('display', 'block');//show saloon window
+	
+	$('#sal_ul_main').slideUp(150);$('#sal_main').css('box-shadow', 'none');//reset
+	$('#sal_ul_sal').slideUp(150);$('#sal_deriv').css('box-shadow', 'none');
+	
+	$('.sn_contracts').removeAttr('style'); //reset styles, TRY $(this).
+	$(this).css({'box-shadow' : 'inset 0 0.3px 2.3px 0 #FFF'});//set stylebox-shadow: 
+});
+
+$(document).on('click', '#sn_c_rr', function(e){//click on first menu
+	$('.windows_shift').css('display', 'none'); 
+	$('#ruro_win').css('display', 'block');
+});
+$(document).on('click', '#sn_c_sb', function(e){	
+	$('.windows_shift').css('display', 'none');
+	$('#sharebid_win').css('display', 'block');
+});
+// RUSSIAN ROULETTE PAGE EXPAND
+$(document).on('click', '#read_instructions', function(e){	
+	$('.rr_instructions').slideDown(300);
 });
 
 // FUCK BITCOIN AND ITS MARKET INFLUENCE. TO FREEDOM!
