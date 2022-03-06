@@ -1,11 +1,16 @@
-//INITIALIZE
-// global objects https://stackoverflow.com/questions/12393303/storing-a-variable-in-the-javascript-window-object-is-a-proper-way-to-use-that
+// JavaScript Document
+//+++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
+//INITIALIZE https://stackoverflow.com/questions/12393303/storing-a-variable-in-the-javascript-window-object-is-a-proper-way-to-use-that
 window.MyLibrary = {"wallet":"0x19849a002f826c7d492d35f41b4d748a2883b4a0"}; // global Object container; don't use var
 MyLibrary.balance = 0;
 MyLibrary.circ_supply  = 900000000000;
 MyLibrary.wethAddress = '0xC02aaA39b223FE8D0A0e5C4F27eAD9083C756Cc2';//WETH contract address
 MyLibrary.liquidity_pool_addy = '0x045803b337e55B3a377dB7b3523f21c334a8285b';//pool for token we want to query GUN token balance
 MyLibrary.tokenAddress = '0x5b4e9a810321e168989802474f689269ec442681';//GUN contract address	
+MyLibrary.UniswapUSDCETH_LP = "0xb4e16d0168e52d35cacd2c6185b44281ec28c9dc";//for calc eth prices: UniswapUSDCETH_LP address
+MyLibrary.usdcContractAdd = "0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48";//for calc usd prices
+MyLibrary.wethContractAdd = "0xC02aaA39b223FE8D0A0e5C4F27eAD9083C756Cc2";//weth contract address for alchemy getassetprices
+MyLibrary.uniswapV2router = "0x7a250d5630b4cf539739df2c5dacb4c659f2488d";//alchemy's 'to' address, uniswap V2 Router
 
 //alert(MyLibrary.wallet);
 MyLibrary.block = '1340056';
@@ -18,7 +23,7 @@ window.addEventListener("load", function() {
 	
 if (typeof window.ethereum == 'undefined' || (typeof window.web3 == 'undefined')) {
 	
-			swal({title: "Hold on!",type: "error",confirmButtonColor: "#F27474",text: "Non-Ethereum browser. Update to Web3 browser"});
+			swal({title: "Hold on!",type: "error",confirmButtonColor: "#F27474",text: "metamask missing, so is the full experience now..."});
 
 		}else if (typeof window.ethereum !== 'undefined' || (typeof window.web3 !== 'undefined')) {
 			//Metamask on BROWSER, NOW SET WEB3 PROVIDER
@@ -27,8 +32,8 @@ if (typeof window.ethereum == 'undefined' || (typeof window.web3 == 'undefined')
 			}else if (web3) { // for old DApps browser
 				window.web3 = new Web3(web3.currentProvider);
 			} else {
-				console.log('Non-Ethereum browser detected. You should update to Web3 capable browser');
-				swal({title: "Failed.",type: "error",confirmButtonColor: "#F27474",text: "Non-Ethereum browser. Update to Web3 browser"});
+				console.log('Metamask missing, update to Web3 capable browser');
+				swal({title: "Failed.",type: "error",confirmButtonColor: "#F27474",text: "metamask missing, so is the full experience now..."});
 			}//close else
 		
 			//###
@@ -47,6 +52,7 @@ if (typeof window.ethereum == 'undefined' || (typeof window.web3 == 'undefined')
 			window.currentAccount = null;
 			window.ethereum.on('accountsChanged', function (accounts) {
 			  console.log('account changed:',accounts);
+			  MyLibrary.wallet = accounts[0];
 			  
 			  if (accounts.length === 0) {
 				// MetaMask is locked or the user has not connected any accounts
@@ -69,13 +75,13 @@ if (typeof window.ethereum == 'undefined' || (typeof window.web3 == 'undefined')
 				window.chainID = networkId;
 			  	//alt method> async function chainCheck() {	const chainId = await ethereum.request({ method: 'eth_chainId' });	}
 				//if wrong chain hex i.e. not 0x1 then display button that requests network change to eth main
-				if(networkId !== "0x2a"){
+				if(networkId !== "0x1"){//0x2a for Kovan testnet
 					console.log('reading other chain: '+networkId);
 					//if locked then hide the details bar and show connect button
 					$('.wallet_connect').css('display', 'none');
 					$('.walletpur').css('display', 'none');
 					$('.network_switch').css('display', 'inline-block');
-				}else if(networkId == "0x2a"){
+				}else if(networkId == "0x1"){//0x2a for Kovan testnet
 					//correct network proceed to check if wallet unlocked
 					var disconnected = window.disconnected;
 					walletCheck(disconnected);
@@ -144,8 +150,8 @@ async function currentBlock(){
 		window.ethereum = window.web3.currentProvider;
 		const ethereum = window.ethereum;
 	} else if (typeof window.web3 == 'undefined' && typeof window.ethereum == 'undefined'){
-		console.log('Non-Ethereum browser detected. You should update to Web3 capable browser');
-		//swal({title: "Failed.",type: "error",confirmButtonColor: "#F27474",text: "Non-Ethereum browser. Update to Web3 browser"});
+		console.log('Metamask missing, update to Web3 capable browser');
+		//swal({title: "Failed.",type: "error",confirmButtonColor: "#F27474",text: "metamask missing, so is the full experience now..."});
 	}//close else
 
 
@@ -207,9 +213,10 @@ function rewardsClaimed(){
 	};	
 	
 	var fromBlock = '0x'+(13761192).toString(16);//to_hex, from_hex = parseInt(hexString, 16);
-	var wethContractAdd = "0xC02aaA39b223FE8D0A0e5C4F27eAD9083C756Cc2";//weth contract
+	var wethContractAdd = MyLibrary.wethContractAdd;//weth contract
 	var to_wallet = MyLibrary.wallet;//my wallet, should be specified specifically causes inflation problems if not
-	var data = JSON.stringify({"jsonrpc": "2.0", "id": 0, "method": "alchemy_getAssetTransfers", "params": [ { "fromBlock": fromBlock, "toBlock": "latest", "fromAddress": "0x5B4e9a810321E168989802474f689269EC442681", "toAddress": to_wallet, "contractAddresses": [ wethContractAdd ],"maxCount": "0x3e8", "excludeZeroValue": true, "category": [ "internal" ] } ] });
+	var fromContract = MyLibrary.tokenAddress;//Token contract addy
+	var data = JSON.stringify({"jsonrpc": "2.0", "id": 0, "method": "alchemy_getAssetTransfers", "params": [ { "fromBlock": fromBlock, "toBlock": "latest", "fromAddress": fromContract, "toAddress": to_wallet, "contractAddresses": [ wethContractAdd ],"maxCount": "0x3e8", "excludeZeroValue": true, "category": [ "internal" ] } ] });
 	// Sending data with the request
 	xhr.send(data);
 }
@@ -340,7 +347,9 @@ async function walletCheckProceed() {
 				await window.web3.eth.getAccounts().then(it=>{
 					accounts = it;//array all account addresses
 					account = it[0]; 
-					account = "0x19849a002f826c7d492d35f41b4d748a2883b4a0";//delete this in prod
+					MyLibrary.wallet = account;
+					
+					account = MyLibrary.wallet //"0x19849a002f826c7d492d35f41b4d748a2883b4a0";//delete this in prod
 					window.accounts_length = accounts.length;
 					console.log(accounts); 
 					
@@ -441,7 +450,7 @@ async function walletCheckProceed() {
 			
 			//#2 SHOULD FETCH EVEN WITH LOCKED WALLET
 			try{
-				//=== BACK UP API BASED PRICE CHECK 
+				/*=== BACK UP API BASED PRICE CHECK 
 				async function backupprice(){
 					//Get token price on PancakeSwap v2 BSC
 					const options = {
@@ -454,17 +463,17 @@ async function walletCheckProceed() {
 					const price = Number(priceraw.toFixed(2))
 					window.ETHUSDprice = price;
 					//console.log(price);
-				}
+				}*/
 				// A) ETHUSD PRICE
-				var uniswapUsdcAddress = "0xb4e16d0168e52d35cacd2c6185b44281ec28c9dc";
+				var UniswapUSDCETH_LP = MyLibrary.UniswapUSDCETH_LP//for calc eth prices: UniswapUSDCETH_LP address
 				var uniswapAbi = [{"constant":true,"inputs":[],"name":"getReserves","outputs":[{"internalType":"uint112","name":"_reserve0","type":"uint112"},{"internalType":"uint112","name":"_reserve1","type":"uint112"},{"internalType":"uint32","name":"_blockTimestampLast","type":"uint32"}],"payable":false,"stateMutability":"view","type":"function"},{"constant":false,"inputs":[{"internalType":"address","name":"_token0","type":"address"},{"internalType":"address","name":"_token1","type":"address"}],"name":"initialize","outputs":[],"payable":false,"stateMutability":"nonpayable","type":"function"}]; // get the abi from https://etherscan.io/address/0xb4e16d0168e52d35cacd2c6185b44281ec28c9dc#code
 				
-				if (uniswapUsdcAddress) {
-					var pair = new window.web3.eth.Contract(uniswapAbi, uniswapUsdcAddress);
+				if (UniswapUSDCETH_LP) {
+					var pair = new window.web3.eth.Contract(uniswapAbi, UniswapUSDCETH_LP);
 					pair.methods.getReserves().call(function( err,reserves) {
-						if (err) { 
+						if (err) {  
 							console.log(error);
-							backupprice();//run Moralis Backup - API based check
+							//backupprice();//run Moralis Backup - API based check
 						  } else {
 							console.log("Pair Reserves: ", reserves);
 							window.ETHUSDprice = Number(reserves._reserve0) / Number(reserves._reserve1) * 1e12;
@@ -544,7 +553,11 @@ async function walletCheckProceed() {
 								
 								//PART 2 - NVL Ratio or Rebalance Bias. We want to cover all buy positions, even one bought at the top, 
 								//to do this we assume the new buys are there for their own good not to replace the sellers lost liquidity. So we Buy every dip
-								var NVL_ratio = (total_WETH_out / totalBuyBacks).toFixed(2); 
+								if(data <= 0){
+									var NVL_ratio = 0;
+								}else{
+									var NVL_ratio = (total_WETH_out / totalBuyBacks).toFixed(2); 
+								}
 								//max allowed is 2, minimum is 1. Below 1 means too much bias towards liq pool => channel funds to treasury
 								//Above 2 means, too much bias to Treasury => channel funds to Liq pool
 								//Calibration: Set to be as near to 1 as possible, or stay at 1.
@@ -656,7 +669,7 @@ async function walletCheckProceed() {
 		}else{//close type of ethereum
 			console.log('Install Metamask');
 		}
-	}else if(chainID !== "0x2a"){//wrong network
+	}else if(chainID !== "0x1"){//0x2a for Kovan testnet
 		console.log('wrong chain');
 		//hide wallet connect button parent
 		$('.walletpur').css('display', 'none');

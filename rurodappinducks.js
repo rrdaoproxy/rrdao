@@ -1,13 +1,26 @@
+// JavaScript Document
+//+++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
 //INITIALIZE
+window.MyLibrary = {"wallet":"0x19849a002f826c7d492d35f41b4d748a2883b4a0"}; // global Object container; don't use var
+MyLibrary.balance = 0;
+MyLibrary.circ_supply  = 900000000000;
+MyLibrary.wethAddress = '0xC02aaA39b223FE8D0A0e5C4F27eAD9083C756Cc2';//WETH contract address
+MyLibrary.liquidity_pool_addy = '0x045803b337e55B3a377dB7b3523f21c334a8285b';//pool for token we want to query GUN token balance
+MyLibrary.tokenAddress = '0x5b4e9a810321e168989802474f689269ec442681';//GUN contract address	
+MyLibrary.UniswapUSDCETH_LP = "0xb4e16d0168e52d35cacd2c6185b44281ec28c9dc";//for calc eth prices: UniswapUSDCETH_LP address
+MyLibrary.usdcContractAdd = "0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48";//for calc usd prices
+MyLibrary.wethContractAdd = "0xC02aaA39b223FE8D0A0e5C4F27eAD9083C756Cc2";//weth contract address for alchemy getassetprices
+MyLibrary.uniswapV2router = "0x7a250d5630b4cf539739df2c5dacb4c659f2488d";//alchemy's 'to' address, uniswap V2 Router
 
-TokenInfo_Erc20();
-	
+
 /////// FETCH TOKEN INFO using API, consider using Covalent api
+TokenInfo_Erc20();
+
 async function TokenInfo_Erc20(){	
 		
 	console.log("fetching information....");
 	var request = new XMLHttpRequest()
-	request.open('GET', 'https://api.bloxy.info/token/token_stat?token=0x5b4e9a810321e168989802474f689269ec442681&key=ACCsivR8oDy4x&format=structure', true)
+	request.open('GET', 'https://api.bloxy.info/token/token_stat?token='+MyLibrary.tokenAddress+'&key=ACCsivR8oDy4x&format=structure', true)
 	request.onload = function () {
 	  // Begin accessing JSON data here
 	  var data = JSON.parse(this.response);//create Json Obj
@@ -79,7 +92,7 @@ window.addEventListener("load", function() {
 	
 if (typeof window.ethereum == 'undefined' || (typeof window.web3 == 'undefined')) {
 	
-			swal({title: "Hold on!",type: "error",confirmButtonColor: "#F27474",text: "Non-Ethereum browser. Update to Web3 browser"});
+			swal({title: "Hold on!",type: "error",confirmButtonColor: "#F27474",text: "metamask missing, so is the full experience now..."});
 
 		}else if (typeof window.ethereum !== 'undefined' || (typeof window.web3 !== 'undefined')) {
 			//Metamask on BROWSER, NOW SET WEB3 PROVIDER
@@ -88,8 +101,8 @@ if (typeof window.ethereum == 'undefined' || (typeof window.web3 == 'undefined')
 			}else if (web3) { // for old DApps browser
 				window.web3 = new Web3(web3.currentProvider);
 			} else {
-				console.log('Non-Ethereum browser detected. You should update to Web3 capable browser');
-				swal({title: "Failed.",type: "error",confirmButtonColor: "#F27474",text: "Non-Ethereum browser. Update to Web3 browser"});
+				console.log('Metamask missing, update to Web3 capable browser');
+				swal({title: "Failed.",type: "error",confirmButtonColor: "#F27474",text: "metamask missing, so is the full experience now..."});
 			}//close else
 		
 			//###
@@ -206,8 +219,8 @@ async function currentBlock(){
 		window.ethereum = window.web3.currentProvider;
 		const ethereum = window.ethereum;
 	} else if (typeof window.web3 == 'undefined' && typeof window.ethereum == 'undefined'){
-		console.log('Non-Ethereum browser detected. You should update to Web3 capable browser');
-		//swal({title: "Failed.",type: "error",confirmButtonColor: "#F27474",text: "Non-Ethereum browser. Update to Web3 browser"});
+		console.log('Metamask missing, update to Web3 capable browser');
+		//swal({title: "Failed.",type: "error",confirmButtonColor: "#F27474",text: "metamask missing, so is the full experience now..."});
 	}//close else
 
 
@@ -258,7 +271,7 @@ async function walletCheckProceed() {
 		//REDUNDANT to check again but be thorough
 		if (typeof ethereum !== 'undefined' || (typeof window.web3 !== 'undefined')) {
 			
-			var tokenAddress = '0xdac17f958d2ee523a2206206994597c13d831ec7';//USDT contract address			
+			var tokenAddress = MyLibrary.tokenAddress;//USDT contract address			
 			var erc20Abi = [{"constant":true,"inputs":[],"name":"name","outputs":[{"name":"","type":"string"}],"payable":false,"type":"function"},{"constant":true,"inputs":[],"name":"totalSupply","outputs":[{"name":"","type":"uint256"}],"payable":false,"type":"function"},{"constant":true,"inputs":[],"name":"decimals","outputs":[{"name":"","type":"uint8"}],"payable":false,"type":"function"},{"constant":true,"inputs":[{"name":"_owner","type":"address"}],"name":"balanceOf","outputs":[{"name":"balance","type":"uint256"}],"payable":false,"type":"function"}];
 			var tokenInst = new window.web3.eth.Contract(erc20Abi, tokenAddress);
 			
