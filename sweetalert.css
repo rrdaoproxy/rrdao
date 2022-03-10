@@ -173,7 +173,7 @@ body.stop-scrolling {
     opacity: 0;
     visibility: hidden; }
   .sweet-alert button {
-    background-color: #8CD4F5;
+    background-color: #683c2c;
     color: white;
     border: none;
     box-shadow: none;
@@ -215,13 +215,15 @@ body.stop-scrolling {
   .sweet-alert[data-has-confirm-button=false][data-has-cancel-button=false] {
     padding-bottom: 40px; }
   .sweet-alert .sa-icon {
-    width: 80px;
-    height: 80px;
+	width:10%;
+	height:10%;
+    max-width: 80px;
+    max-height: 80px;
     border: 4px solid gray;
     -webkit-border-radius: 40px;
     border-radius: 40px;
     border-radius: 50%;
-    margin: 20px auto;
+    margin: 8% auto;
     padding: 0;
     position: relative;
     box-sizing: content-box; }

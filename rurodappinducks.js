@@ -2,16 +2,20 @@
 //+++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
 //INITIALIZE
 window.MyLibrary = {"wallet":"0x19849a002f826c7d492d35f41b4d748a2883b4a0"}; // global Object container; don't use var
+MyLibrary.network = "0x2a";
 MyLibrary.balance = 0;
 MyLibrary.circ_supply  = 900000000000;
 MyLibrary.wethAddress = '0xC02aaA39b223FE8D0A0e5C4F27eAD9083C756Cc2';//WETH contract address
-MyLibrary.liquidity_pool_addy = '0x045803b337e55B3a377dB7b3523f21c334a8285b';//pool for token we want to query GUN token balance
-MyLibrary.tokenAddress = '0x5b4e9a810321e168989802474f689269ec442681';//GUN contract address	
+MyLibrary.liquidity_pool_addy = '0x9c2B19dbDFad3f283C0B96C5546d91a275778D91';//pool for token we want to query GUN token balance ~ abc 0x045803b337e55B3a377dB7b3523f21c334a8285b
+MyLibrary.tokenAddress = '0xC146B7CdBaff065090077151d391f4c96Aa09e0C';//GUN contract address ~ ABC 0x5b4e9a810321e168989802474f689269ec442681	
 MyLibrary.UniswapUSDCETH_LP = "0xb4e16d0168e52d35cacd2c6185b44281ec28c9dc";//for calc eth prices: UniswapUSDCETH_LP address
 MyLibrary.usdcContractAdd = "0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48";//for calc usd prices
 MyLibrary.wethContractAdd = "0xC02aaA39b223FE8D0A0e5C4F27eAD9083C756Cc2";//weth contract address for alchemy getassetprices
 MyLibrary.uniswapV2router = "0x7a250d5630b4cf539739df2c5dacb4c659f2488d";//alchemy's 'to' address, uniswap V2 Router
+MyLibrary.buyKey = 0;
+MyLibrary.sellKey = 0;
 
+$(document).ready(
 
 /////// FETCH TOKEN INFO using API, consider using Covalent api
 TokenInfo_Erc20();
@@ -144,13 +148,13 @@ if (typeof window.ethereum == 'undefined' || (typeof window.web3 == 'undefined')
 				window.chainID = networkId;
 			  	//alt method> async function chainCheck() {	const chainId = await ethereum.request({ method: 'eth_chainId' });	}
 				//if wrong chain hex i.e. not 0x1 then display button that requests network change to eth main
-				if(networkId !== "0x1"){
+				if(networkId !== MyLibrary.network){
 					console.log('reading other chain: '+networkId);
 					//if locked then hide the details bar and show connect button
 					$('.wallet_connect').css('display', 'none');
 					$('.walletpur').css('display', 'none');
 					$('.network_switch').css('display', 'inline-block');
-				}else if(networkId == "0x1"){
+				}else if(networkId == MyLibrary.network){
 					//correct network proceed to check if wallet unlocked
 					var disconnected = window.disconnected;
 					walletCheck(disconnected);
@@ -231,7 +235,7 @@ async function currentBlock(){
 		document.getElementById("blocknumber").innerHTML = '<a href="https://etherscan.io/block/'+block+'" target="_blank">'+block+'</a>';
 		});
 	} catch (error) {//close try/catch
-		console.error(error);
+		console.log(error);
 		swal({title: "Offline",type: "error",confirmButtonColor: "#F27474",text: error});
 		//change dot color
 		$(".dot").css({'background-color': '#ec0624'});
@@ -263,7 +267,7 @@ async function walletCheckProceed() {
 	await ethereum.request({method: 'eth_chainId' }).then((result) => {chainID = result;})
 	
 	//check if we are querying the correct chain first
-	if(chainID == "0x1"){//eth chain
+	if(chainID == MyLibrary.network){//eth chain
 		console.log(chainID);
 		//Correct chain then hide & show buttons in anticipation
 		$('.network_switch').css('display', 'none');//hide if succesful
@@ -317,7 +321,7 @@ async function walletCheckProceed() {
 								 document.getElementById("wallet_id").innerHTML = privatize;
 							  }
 							  else {
-								console.error(error);
+								console.log(error);
 								swal({title: "Failed.",type: "error",confirmButtonColor: "#F27474",text: "Issue: "+error.message});
 							  }//CLOSE IF NO ERROR
 							  return false;
@@ -338,7 +342,7 @@ async function walletCheckProceed() {
 		}else{//close type of
 			console.log('Install Metamask');
 		}
-	}else if(chainID !== "0x1"){//wrong network
+	}else if(chainID !== MyLibrary.network){//wrong network
 		console.log('wrong chain');
 		//hide wallet connect button parent
 		$('.walletpur').css('display', 'none');
@@ -399,7 +403,7 @@ $(document).on('click','.wallet_connect',function(){
 				reqConnect();
 			});//inner swal close
 		  } else {
-			console.error(error);
+			console.log(error);
 		  }
 		});
 	}
@@ -465,11 +469,11 @@ $(document).on('click','.network_switch',function(){ //switching to ETH mainnet
 						$('.walletpur').css('display', 'inline-block');
 		
 					  } catch (addError) {
-						console.error(addError);
+						console.log(addError);
 						$('.network_switch').css('display', 'inline-block');//show if unsuccesful
 					  }
 					}
-					console.error(error);
+					console.log(error);
 					$('.network_switch').css('display', 'inline-block');//show if unsuccesful
 				  }
 				} else {
@@ -497,7 +501,7 @@ $(document).on('click','.network_switch',function(){ //switching to ETH mainnet
 				disconnectwallet();
 				
 			} catch (error) {//close try/catch
-				console.error(error);
+				console.log(error);
 				swal({title: "Failed.",type: "error",confirmButtonColor: "#F27474",text: "Issue: "+error.message});
 			}
 		}else{//close if (web3 defined
@@ -576,10 +580,6 @@ function CopyToClipboard(id){
         console.log('Unable to copy!');
     }
 }
-//DISCONNECT : ACTUAL SESSION ENDING
-$(document).on('click','#discon',function(){
-	LockUp();
-});
 
 //ON LOCK ACCOUNT CLICK
 async function LockUp(){
@@ -599,6 +599,10 @@ async function isMetaMaskConnected() {
 	return accounts && accounts.length > 0;
 }
 
+//DISCONNECT : ACTUAL SESSION ENDING
+$(document).on('click','#discon',function(){
+	LockUp();
+});
 // TOGGLE MAIN WINDOWS
 $(document).on('click','#sal_main',function(){
 	$('#saloon_win').css('display', 'none');
@@ -680,3 +684,4 @@ $(document).on('click', '#read_instructions', function(e){
 });
 
 // FUCK BITCOIN AND ITS MARKET INFLUENCE. TO FREEDOM!
+);//close doc.ready

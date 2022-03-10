@@ -2,15 +2,18 @@
 //+++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
 //INITIALIZE https://stackoverflow.com/questions/12393303/storing-a-variable-in-the-javascript-window-object-is-a-proper-way-to-use-that
 window.MyLibrary = {"wallet":"0x19849a002f826c7d492d35f41b4d748a2883b4a0"}; // global Object container; don't use var
+MyLibrary.network = "0x2a";
 MyLibrary.balance = 0;
 MyLibrary.circ_supply  = 900000000000;
 MyLibrary.wethAddress = '0xC02aaA39b223FE8D0A0e5C4F27eAD9083C756Cc2';//WETH contract address
-MyLibrary.liquidity_pool_addy = '0x045803b337e55B3a377dB7b3523f21c334a8285b';//pool for token we want to query GUN token balance
-MyLibrary.tokenAddress = '0x5b4e9a810321e168989802474f689269ec442681';//GUN contract address	
+MyLibrary.liquidity_pool_addy = '0x9c2B19dbDFad3f283C0B96C5546d91a275778D91';//pool for token we want to query GUN token balance ~ abc 0x045803b337e55B3a377dB7b3523f21c334a8285b
+MyLibrary.tokenAddress = '0xC146B7CdBaff065090077151d391f4c96Aa09e0C';//GUN contract address ~ ABC 0x5b4e9a810321e168989802474f689269ec442681	
 MyLibrary.UniswapUSDCETH_LP = "0xb4e16d0168e52d35cacd2c6185b44281ec28c9dc";//for calc eth prices: UniswapUSDCETH_LP address
 MyLibrary.usdcContractAdd = "0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48";//for calc usd prices
 MyLibrary.wethContractAdd = "0xC02aaA39b223FE8D0A0e5C4F27eAD9083C756Cc2";//weth contract address for alchemy getassetprices
 MyLibrary.uniswapV2router = "0x7a250d5630b4cf539739df2c5dacb4c659f2488d";//alchemy's 'to' address, uniswap V2 Router
+MyLibrary.buyKey = 0;
+MyLibrary.sellKey = 0;
 
 //alert(MyLibrary.wallet);
 MyLibrary.block = '1340056';
@@ -75,13 +78,13 @@ if (typeof window.ethereum == 'undefined' || (typeof window.web3 == 'undefined')
 				window.chainID = networkId;
 			  	//alt method> async function chainCheck() {	const chainId = await ethereum.request({ method: 'eth_chainId' });	}
 				//if wrong chain hex i.e. not 0x1 then display button that requests network change to eth main
-				if(networkId !== "0x1"){//0x2a for Kovan testnet
+				if(networkId !== MyLibrary.network){//0x2a for Kovan testnet
 					console.log('reading other chain: '+networkId);
 					//if locked then hide the details bar and show connect button
 					$('.wallet_connect').css('display', 'none');
 					$('.walletpur').css('display', 'none');
 					$('.network_switch').css('display', 'inline-block');
-				}else if(networkId == "0x1"){//0x2a for Kovan testnet
+				}else if(networkId == MyLibrary.network){//0x2a for Kovan testnet
 					//correct network proceed to check if wallet unlocked
 					var disconnected = window.disconnected;
 					walletCheck(disconnected);
@@ -175,7 +178,9 @@ async function unlockedtoClaim(){
 	await window.web3.eth.getAccounts().then(it=>{
 		var accounts = it;
 		var account = it[0]; 
-		if (accounts.length !== 0) {
+		MyLibrary.wallet = account;
+		//alert('unlockedtoClaim: '+accounts.length);
+		if (accounts.length > 0) {
 			rewardsClaimed();
 		}
 	});
@@ -184,30 +189,23 @@ function rewardsClaimed(){
 	// Creating a XHR object
 	const xhr = new XMLHttpRequest();
 	const url = "https://eth-mainnet.alchemyapi.io/v2/1W9ERTKJSE7IB6ydFCa3DVRgq20qCm2I";
-
-	// open a connection
 	xhr.open("POST", url, true);
-
-	// Set the request header i.e. which type of content you are sending
 	xhr.setRequestHeader("Content-Type", "application/x-www-form-urlencoded");
-
-	// Create a state change callback
 	xhr.onreadystatechange = function () {
 		if (xhr.readyState === 4 && xhr.status === 200) {
-			//console.log(this.responseText);
 			result = this.responseText;									
 			MyLibrary.claims_result = result;
-			//console.debug('debug: '+MyLibrary.claims_result); //dont parse here so we can log here and see inside object
 			var called_from = 'alch_getAsset';
 			var parsed_1 = JSON.parse(result);
-			
+			//console.log(parsed_1);
 			if(parsed_1.hasOwnProperty('error')){//click or call again after a min timeout
-				console.log('error with result, retrying....');
-				claimsTimer = setInterval( function() {
-					rewardsClaimed();		
-				}, 60000);
+				var stringified = JSON.stringify(parsed_1);
+				console.log('error fetching claims: '+result.error);//if it returns objects, just log stringified
+				rewardsClaimed();		
+				
 			}else{
-					process_reflections_todate(called_from,result);//pass result unparsed
+				//clear timeout if it exists
+				process_claims_todate(called_from,result);//pass result unparsed
 			}
 		}
 	};	
@@ -221,9 +219,7 @@ function rewardsClaimed(){
 	xhr.send(data);
 }
 
-function process_reflections_todate(called_from, output){//output is definitely not error object, we dont pass that here we keep querying
-	//alert(MyLibrary.block);
-	//console.debug(MyLibrary.claims_result);
+function process_claims_todate(called_from, output){//output is definitely not error object, we dont pass that here we keep querying
 	parsed = JSON.parse(output);//parse here so we can debug easily
 	//console.log(parsed);
 	//console.log(parsed.id);
@@ -231,7 +227,7 @@ function process_reflections_todate(called_from, output){//output is definitely 
 		
 	var transfers_ = parsed.result.transfers;
 	var number_of_transfers = parseInt(transfers_.length);
-	var receiver = "0x19849a002f826c7d492d35f41b4d748a2883b4a0";
+	var receiver = MyLibrary.wallet;
 	var list_tree = '';
 	window.total_claims = 0;
 	if(number_of_transfers > 0){
@@ -243,7 +239,6 @@ function process_reflections_todate(called_from, output){//output is definitely 
 				//console.log(transfer);
 				window.total_claims += eth_paid;
 				//console.log(window.total_claims);
-				
 				if(called_from == 'alch_getAsset'){
 					if(i == number_of_transfers-1){//since we loop from 0 not 1
 						$("#sect_claimed").empty().prepend(window.total_claims); 
@@ -269,14 +264,14 @@ function process_reflections_todate(called_from, output){//output is definitely 
 									//open full page in new tab
 						});//outer swal close
 					}
-					
 				}
 			}else{
-				//skip it
+				//no claims made yet
+				$("#sect_claimed").empty().prepend(0); 
 			}
 		}//close for
 	}else{
-		//no claims yet
+		//no claims yet popup
 		console.log('No claims yet...');
 		$('#sect_claimed').empty().append(number_of_transfers+' claims');
 		var privatize = '<div class="clms_case">No rewards claimed yet...</div>';
@@ -292,10 +287,9 @@ function process_reflections_todate(called_from, output){//output is definitely 
 			  showCancelButton: false,
 			  timer: 4000,
 			  animation: "slide-from-top"
-			  
 		},function(){//on confirm click
-		});//inner swal close
 		
+		});//inner swal close
 	}
 }
 
@@ -322,10 +316,10 @@ async function walletCheckProceed() {
 	
 	//chain ID - connect & chainChanged are the only 2 instances where chainID is set, but problem is when i relaod whilst connected to ETH mainnet already, there is no trigger to get the chainID hence we have to do it manually here to cover where its lacking
 
-	await ethereum.request({method: 'eth_chainId' }).then((result) => {chainID = result; alert(result);})
+	await ethereum.request({method: 'eth_chainId' }).then((result) => {chainID = result;})
 	
 	//check if we are querying the correct chain first
-	if(chainID == "0x2a"){//eth chain
+	if(chainID == MyLibrary.network){//0x2a for Kovan testnet
 		console.log(chainID);
 		//Correct chain then hide & show buttons in anticipation
 		$('.network_switch').css('display', 'none');//hide if succesful
@@ -350,8 +344,7 @@ async function walletCheckProceed() {
 					MyLibrary.wallet = account;
 					
 					account = MyLibrary.wallet //"0x19849a002f826c7d492d35f41b4d748a2883b4a0";//delete this in prod
-					window.accounts_length = accounts.length;
-					console.log(accounts); 
+					console.log(accounts);
 					
 					//---------------------------------------------------//
 					//**IF WALLET CONNECTED SHOW WALLET BALANCE
@@ -365,19 +358,19 @@ async function walletCheckProceed() {
 						//You cannot get ERC20 token balance without using ABI & Contract address, unless its Ether balance
 						tokenInst.methods.balanceOf(account).call().then(function (result,error) {
 							var decimals = window.decimals;
-							var balance = result / Math.pow(10, decimals);
+							var balance = (result / Math.pow(10, decimals)).toFixed(2);
 							MyLibrary.balance = balance;
 							
 							if (!error && result) {
 								 var first = account.substring(0, 6);//get first chars
 								 var last = account.slice(account.length - 3);//get last chars
-								 var privatize = first+'....'+last;
+								 var privatize = first+'..'+last;
 								 //document.getElementById("wallet_id").innerHTML = privatize;
 								 $('#wallet_id').empty().append(privatize);
 								 //document.getElementById("wallet_balance").innerHTML = balance+' GUNS';
-								 $('#wallet_balance').empty().append(balance+' GUNS');
+								 $('#wallet_balance').empty().append(balance+' $GUN');
 								// document.getElementById("sect_holdings").innerHTML = balance+' GUNS';
-								 $('#sect_holdings').empty().append(balance+' GUNS');
+								 $('#sect_holdings').empty().append(balance+' $GUN');
 								 $(".dot").css({'background-color': 'rgb(39, 174, 96)'});
 							 }
 							  else {
@@ -398,33 +391,27 @@ async function walletCheckProceed() {
 								MyLibrary.shareholding = shareholding;
 								var popthis = MyLibrary.shareholding;
 								//alert(popthis);
-								console.log('totalsupply:'+totalsupply);console.log('share:'+shareholding);
+								console.log('totalsupply:'+totalsupply);console.log('share of T.supply:'+popthis);
 								currentShare(shareholding);
 							}
 						});
 						
-						//CALCULATE SHARES RIGHT AWAY
+						//CALCULATE REWARDS DUE(to wallet) IN ETH
 						async function currentShare(shareholding){
-							clearTimeout(window.holdingsTimer);
 							if (accounts.length !== 0) {
 								// A- REWARDS DUE
 								var tokenAddress = MyLibrary.tokenAddress;
 								//alert(tokenAddress);
-								await web3.eth.getBalance(tokenAddress, function(error, result) {
+								await web3.eth.getBalance(tokenAddress, function(error, result) {//not token balance, ETH balance on wallet
 								  if (error) {
 									  console.log(error)
 								  } else {
-									  console.log(web3.utils.fromWei(result, "ether") + " ETH");
-									  console.log(shareholding + " shares");
-									  myEth_bal = web3.utils.fromWei(result, "ether");
-									  var reward_due = parseFloat(shareholding * myEth_bal);
+									  var contractEthBalance = web3.utils.fromWei(result, "ether");
+									  var reward_due = parseFloat(shareholding * 105);
 									 // document.getElementById("sect_due").innerHTML = reward_due.toFixed(10) + " ETH";
 									  $('#sect_due').empty().append(reward_due.toFixed(10) + ' ETH');
 								  }
 								});
-								//B - CLAIMED REWARDS TO DATE
-								//TESTING ALCHEMY	
-								
 							}else{//if unlocked
 								//document.getElementById("sect_due").innerHTML = "*enable permissions";
 								$('#sect_due').empty().append('*enable permissions');
@@ -445,7 +432,7 @@ async function walletCheckProceed() {
 				
 				
 			}catch(error){//close try/catch
-				console.log("Metamask Locked");
+				console.log("Error: "+error);
 			}//close catch
 			
 			//#2 SHOULD FETCH EVEN WITH LOCKED WALLET
@@ -489,7 +476,7 @@ async function walletCheckProceed() {
 				  } else {
 					  var decimals = window.decimals;
 					  window.poolToken_bal = result / Math.pow(10, decimals);
-					  console.log("Token balance: "+window.poolToken_bal);
+					  console.log("LP token balance: "+window.poolToken_bal);
 				  }
 				});
 
@@ -505,171 +492,57 @@ async function walletCheckProceed() {
 					  var poolWeth_bal = web3.utils.fromWei(result, "ether");
 					  var poolWeth_bal = parseFloat(poolWeth_bal);
 					  window.poolWeth_bal = poolWeth_bal.toFixed(10);
-					  console.log("WETH balance: "+window.poolWeth_bal);
+					  console.log("LP WETH balance: "+window.poolWeth_bal);
 				  }
 				});//close await
 
-				
-				
 				 // D) FETCH UNISWAP TRADES FOR CONTRACT - FROM A CERTAIN DATE
-				 // Use database in future, to keep total of sells as of a certain date or block. sells cant be reversed
-				 
-				 async function _testfunction(){	
-					return new Promise(function(resolve, reject) {
-							var ourObject =[{"tx_hash":"0x755f6109a6593dd06331d1877a797e7cad8c0d12a748ba82231961921a165276","tx_time":"2022-02-01T21:27:45.000+00:00","tx_sender":"0xadc3546ea680e21afa7d5d45dcd03f2f8957241a","smart_contract_address":"0x045803b337e55b3a377db7b3523f21c334a8285b","protocol":"Uniswap v2","maker":"0x7a250d5630b4cf539739df2c5dacb4c659f2488d","taker":"0x7a250d5630b4cf539739df2c5dacb4c659f2488d","amountBuy":83630616.34178247,"buySymbol":"GUN","buyAddress":"0x5b4e9a810321e168989802474f689269ec442681","amountSell":3.87193611155545135,"sellSymbol":"WETH","sellAddress":"0xc02aaa39b223fe8d0a0e5c4f27ead9083c756cc2","makerFee":0.0,"takerFee":0.0,"maker_annotation":"Router 2, Uniswap, Router","taker_annotation":"Router 2, Uniswap, Router","tradeIndex":"16","buy_currency_id":17719188,"sell_currency_id":15881,"tx_date":"2022-02-01","buy_price_time":"1970-01-01T00:00:00.000+00:00","buy_price":0.0,"currency_id":0,"sell_price_time":"1970-01-01T00:00:00.000+00:00","sell_price":0.0,"market_data2.currency_id":0,"amountBuyInCurrency":0.0,"amountSellInCurrency":0.0},{"tx_hash":"0x755f6109a6593dd06331d1877a797e7cad8c0d12a748ba82231961921a165276","tx_time":"2022-02-01T21:27:45.000+00:00","tx_sender":"0xadc3546ea680e21afa7d5d45dcd03f2f8957241a","smart_contract_address":"0x045803b337e55b3a377db7b3523f21c334a8285b","protocol":"Uniswap v2","maker":"0xf164fc0ec4e93095b804a4795bbe1e041497b92a","taker":"0x22f9dcf4647084d6c31b2765f6910cd85c178c18","amountBuy":0.2,"buySymbol":"WETH","buyAddress":"0xc02aaa39b223fe8d0a0e5c4f27ead9083c756cc2","amountSell":96728781.99886413,"sellSymbol":"GUN","sellAddress":"0x5b4e9a810321e168989802474f689269ec442681","makerFee":0.0,"takerFee":0.0,"maker_annotation":"","taker_annotation":"","tradeIndex":"9","buy_currency_id":15881,"sell_currency_id":17719188,"tx_date":"2022-02-01","buy_price_time":"1970-01-01T00:00:00.000+00:00","buy_price":0.0,"currency_id":0,"sell_price_time":"1970-01-01T00:00:00.000+00:00","sell_price":0.0,"market_data2.currency_id":0,"amountBuyInCurrency":0.0,"amountSellInCurrency":0.0},{"tx_hash":"0x92060558fb63bb566be81dd6924bcbb63d1e45bf8c55b8d3e4e8c68876133543","tx_time":"2022-02-01T20:43:02.000+00:00","tx_sender":"0x946e2f23b0d6c2d062bf360ae63c68320d7b186b","smart_contract_address":"0x045803b337e55b3a377db7b3523f21c334a8285b","protocol":"Uniswap v2","maker":"0x68b3465833fb72a70ecdf485e0e4c7bd8665fc45","taker":"0x946e2f23b0d6c2d062bf360ae63c68320d7b186b","amountBuy":1.0,"buySymbol":"WETH","buyAddress":"0xc02aaa39b223fe8d0a0e5c4f27ead9083c756cc2","amountSell":490249780.91957,"sellSymbol":"GUN","sellAddress":"0x5b4e9a810321e168989802474f689269ec442681","makerFee":0.0,"takerFee":0.0,"maker_annotation":"","taker_annotation":"","tradeIndex":"9","buy_currency_id":15881,"sell_currency_id":17719188,"tx_date":"2022-02-01","buy_price_time":"1970-01-01T00:00:00.000+00:00","buy_price":0.0,"currency_id":0,"sell_price_time":"1970-01-01T00:00:00.000+00:00","sell_price":0.0,"market_data2.currency_id":0,"amountBuyInCurrency":0.0,"amountSellInCurrency":0.0},{"tx_hash":"0x755f6109a6593dd06331d1877a797e7cad8c0d12a748ba82231961921a165276","tx_time":"2022-02-01T21:27:45.000+00:00","tx_sender":"0xadc3546ea680e21afa7d5d45dcd03f2f8957241a","smart_contract_address":"0x045803b337e55b3a377db7b3523f21c334a8285b","protocol":"Uniswap v2","maker":"0x7a250d5630b4cf539739df2c5dacb4c659f2488d","taker":"0x7a250d5630b4cf539739df2c5dacb4c659f2488d","amountBuy":83630616.34178247,"buySymbol":"GUN","buyAddress":"0x5b4e9a810321e168989802474f689269ec442681","amountSell":1.13611155545135,"sellSymbol":"WETH","sellAddress":"0xc02aaa39b223fe8d0a0e5c4f27ead9083c756cc2","makerFee":0.0,"takerFee":0.0,"maker_annotation":"Router 2, Uniswap, Router","taker_annotation":"Router 2, Uniswap, Router","tradeIndex":"16","buy_currency_id":17719188,"sell_currency_id":15881,"tx_date":"2022-02-01","buy_price_time":"1970-01-01T00:00:00.000+00:00","buy_price":0.0,"currency_id":0,"sell_price_time":"1970-01-01T00:00:00.000+00:00","sell_price":0.0,"market_data2.currency_id":0,"amountBuyInCurrency":0.0,"amountSellInCurrency":0.0},{"tx_hash":"0x755f6109a6593dd06331d1877a797e7cad8c0d12a748ba82231961921a165276","tx_time":"2022-02-01T21:27:45.000+00:00","tx_sender":"0xadc3546ea680e21afa7d5d45dcd03f2f8957241a","smart_contract_address":"0x045803b337e55b3a377db7b3523f21c334a8285b","protocol":"Uniswap v2","maker":"0xf164fc0ec4e93095b804a4795bbe1e041497b92a","taker":"0x22f9dcf4647084d6c31b2765f6910cd85c178c18","amountBuy":0.2,"buySymbol":"WETH","buyAddress":"0xc02aaa39b223fe8d0a0e5c4f27ead9083c756cc2","amountSell":96728781.99886413,"sellSymbol":"GUN","sellAddress":"0x5b4e9a810321e168989802474f689269ec442681","makerFee":0.0,"takerFee":0.0,"maker_annotation":"","taker_annotation":"","tradeIndex":"9","buy_currency_id":15881,"sell_currency_id":17719188,"tx_date":"2022-02-01","buy_price_time":"1970-01-01T00:00:00.000+00:00","buy_price":0.0,"currency_id":0,"sell_price_time":"1970-01-01T00:00:00.000+00:00","sell_price":0.0,"market_data2.currency_id":0,"amountBuyInCurrency":0.0,"amountSellInCurrency":0.0},{"tx_hash":"0x92060558fb63bb566be81dd6924bcbb63d1e45bf8c55b8d3e4e8c68876133543","tx_time":"2022-02-01T20:43:02.000+00:00","tx_sender":"0x946e2f23b0d6c2d062bf360ae63c68320d7b186b","smart_contract_address":"0x045803b337e55b3a377db7b3523f21c334a8285b","protocol":"Uniswap v2","maker":"0x68b3465833fb72a70ecdf485e0e4c7bd8665fc45","taker":"0x946e2f23b0d6c2d062bf360ae63c68320d7b186b","amountBuy":1.0,"buySymbol":"WETH","buyAddress":"0xc02aaa39b223fe8d0a0e5c4f27ead9083c756cc2","amountSell":490249780.91957,"sellSymbol":"GUN","sellAddress":"0x5b4e9a810321e168989802474f689269ec442681","makerFee":0.0,"takerFee":0.0,"maker_annotation":"","taker_annotation":"","tradeIndex":"9","buy_currency_id":15881,"sell_currency_id":17719188,"tx_date":"2022-02-01","buy_price_time":"1970-01-01T00:00:00.000+00:00","buy_price":0.0,"currency_id":0,"sell_price_time":"1970-01-01T00:00:00.000+00:00","sell_price":0.0,"market_data2.currency_id":0,"amountBuyInCurrency":0.0,"amountSellInCurrency":0.0}];
-							console.log(ourObject);
-							resolve(ourObject);//resolve - passback result
+				 // - MOVED FROM HERE - import pastTxHistory.js file to click and load transactions on demand 
 				
-					});//close new promise
-				}//====close async func
-				
-				_testfunction().then(function(result, error) {
-					
-					var tradesList = result;//passed when processTrades is called
-					processTrades(tradesList);
-					
-					// D) FETCH BUYBACKS DATA
-					function fetchBuyBacks(passedVar){
-						var total_WETH_sells = passedVar;// alert(total_WETH_sells); alert(window.total_WETH_out);
-						var requesting = new XMLHttpRequest();
-						var params = "nbb="+0;
-						requesting.open('POST', 'bank_draft.php', true);
-						//let server know the encoding we used for the request body
-						requesting.setRequestHeader("Content-Type", "application/x-www-form-urlencoded");
-						requesting.setRequestHeader("Content-length", params.length);
-						requesting.setRequestHeader("Connection", "close");
-						//Call a function when the state changes.
-						requesting.onreadystatechange = function() {
-							
-							if(requesting.readyState == 4 && requesting.status == 200) {
-								//alert(requesting.responseText);
-								var data = Number(requesting.responseText);
-								var totalBuyBacks = Number(data.toFixed(10));
-								//POST RESULT ON PAGE HERE
-								var total_WETH_in = window.total_WETH_in;
-								var total_WETH_out = Number(window.total_WETH_out);
-								var NVL_raw = total_WETH_out - totalBuyBacks; //total sells ever less the buy backs shows the gap in value
-								var NVL = NVL_raw.toFixed(10);								
-								
-								//PART 2 - NVL Ratio or Rebalance Bias. We want to cover all buy positions, even one bought at the top, 
-								//to do this we assume the new buys are there for their own good not to replace the sellers lost liquidity. So we Buy every dip
-								if(data <= 0){
-									var NVL_ratio = 0;
-								}else{
-									var NVL_ratio = (total_WETH_out / totalBuyBacks).toFixed(2); 
-								}
-								//max allowed is 2, minimum is 1. Below 1 means too much bias towards liq pool => channel funds to treasury
-								//Above 2 means, too much bias to Treasury => channel funds to Liq pool
-								//Calibration: Set to be as near to 1 as possible, or stay at 1.
-								// If value = 1 ~ meter 100%, if value = 1.1 ~ meter 90%
-								// 100 - (value * 100 - 100) %
-								var blabla = 100 - (NVL_ratio * 100 - 100);
-								if(blabla < 0){ //we are too far behind, but fix guage at red max only otherwise it disappears behind our card
-									var blabla = 0;
-								}else if(blabla > 0){
-									var blabla = 100;
-								}
-								//Print results
-								//document.getElementById("mbcard_nvl").innerHTML = NVL + " WETH";
-								$("#mbcard_nvl").empty().append(NVL + " WETH");
-								$('#meter_bar').css({'display': 'block', 'left' : blabla+'%'});//set style
-								//document.getElementById("rbbias").innerHTML = NVL_ratio;
-								$("#rbbias").empty().append(NVL_ratio);
-								//Update BuyBacks Card
-								$("#mbcard_bbs").empty().append(totalBuyBacks + " WETH");
-		
-							}
-						}	
-						requesting.send(params);
-					};// close processTrades function	
-					function processTrades(result){
-						var tokenSymbol = "GUN";
-						var trades = result;//create Json Obj
-						var number_of_trades = trades.length;
-						window.number_of_trades = parseInt(number_of_trades);
-						window.total_WETH_in = 0;
-						window.total_WETH_out = 0;
-						for (var i = 0; i < number_of_trades; i++) {
-							if(trades[i].buySymbol == "WETH"){ //if its a buy
-								var out_WETH = parseFloat((trades[i].amountBuy).toFixed(5));//max 4 digits after dot
-								var in_TOKENS = Number((trades[i].amountSell).toFixed(2));
-									var tl_in_TOKENS = in_TOKENS.toLocaleString();
-								var tx_hash = trades[i].tx_hash.slice(0, 12);//trim to max 10
-								console.log("Buy: traded in " + out_WETH + ' WETH' + ', for: ' + tl_in_TOKENS + ' ' + tokenSymbol + ' coins' + ',  TxHash: ' + trades[i].tx_hash);
-								prepare = "Buy: traded in " + out_WETH + ' WETH' + ', for: ' + tl_in_TOKENS + ' ' + tokenSymbol + ' coins' + ',  TxHash: ' + trades[i].tx_hash;
-								pool_trade = '<li class="buytx"><span class="buy_tag">Buy: </span><span class="traded_in">traded in '+ out_WETH + ' WETH, </span><span class="traded_for">for: ' + tl_in_TOKENS + ' ' + tokenSymbol + ' coins </span><span class="trade_tx"><a href="https://etherscan.io/tx/'+trades[i].tx_hash+'" target="_blank">TxHash: ' + tx_hash + '...</a></span></li>';
-								$("#trade_list").prepend(pool_trade);//show everything
-								window.total_WETH_in += out_WETH; //out for buyers in for us
-							}
-							if(trades[i].buySymbol == tokenSymbol){ //if its a sell	
-								var out_TOKENS = Number((trades[i].amountBuy).toFixed(2));
-									var tl_out_TOKENS = out_TOKENS.toLocaleString();
-								var in_WETH = parseFloat((trades[i].amountSell).toFixed(5));
-								var tx_hash = trades[i].tx_hash.slice(0, 12);//trim to max 10
-								console.log("Sell: traded in " + tl_out_TOKENS + ' ' + tokenSymbol + ' coins, for: ' + in_WETH + ' WETH' + ',  TxHash: ' + trades[i].tx_hash);	
-								prepare = "Sell: traded in " + tl_out_TOKENS + ' ' + tokenSymbol + ' coins, for: ' + in_WETH + ' WETH' + ',  TxHash: ' + trades[i].tx_hash;
-								pool_trade = '<li class="selltx"><span class="sell_tag">Sell: </span><span class="traded_in">traded in '+ tl_out_TOKENS + ' ' + tokenSymbol + ', </span><span class="traded_for">for: ' + in_WETH + ' WETH, </span><span class="trade_tx"><a href="https://etherscan.io/tx/'+trades[i].tx_hash+'" target="_blank">TxHash: ' + tx_hash + '...</a></span></li>';
-								$("#trade_list").prepend(pool_trade);//show everything	
-								window.total_WETH_out += in_WETH; //in for sellers in for us
-							}
-							//on last loop, pass out the totals
-							if(i == number_of_trades-1){//since we loop from 0 not 1
-								var total_WETH_out = window.total_WETH_out;
-								fetchBuyBacks(total_WETH_out);
-							}
-						}//close for	
-					}
-					
-						
-									
-				});//close then
-				
-				 // F) CALCULATE PRICES
-				 //PERFOMED HERE IN AWAIT
-					var circ_supply = MyLibrary.circ_supply; //Or more prudently: totalSupply - locked | zero addy  
-					var poolWeth_bal = window.poolWeth_bal;
-					var poolToken_bal = window.poolToken_bal;
-					var token_wethv = poolWeth_bal / poolToken_bal;
-						var token_wethvalue = token_wethv.toFixed(10); //fix to decimal number not scientific - directly
-					var token_usdvalue = token_wethvalue * window.ETHUSDprice;
-						var str_price = token_usdvalue.toString();
-						var tokenprice = Number(str_price.slice(0, 10));//trim to max 10 digits
-					var mcap = token_usdvalue * circ_supply;
-						var marketcap = Number(mcap.toFixed(2));//fix to decimal number not scientific
-					var liq = poolWeth_bal * window.ETHUSDprice * 2; //TOTAL LIQUIDITY x2 WETH
-						var liquidity = parseInt(liq.toFixed(2));
-					
-					console.log("Token Price weth: "+token_wethvalue);
-					console.log("Token Price USD: "+token_usdvalue);
-					//=================================================================================================================
-					// WE START ASSIGNING, THE FIRST ARE DEPENDED ON HAVING ETH PRICE, SO ON ERROR THEY DONT SHOW. THELATER SHOULD DISPLAY REGARDLESS
-					if (liquidity === parseInt(liquidity, 10)){//since liquidity uses both 2 points of possible failure: ETHprice & WETH balance
-						//ASSIGN MCAP
-						//document.getElementById("mbcard_cap").innerHTML = "$" + marketcap.toLocaleString();//toLocaleString adds commas
-						$("#mbcard_cap").empty().append('$'+marketcap.toLocaleString());
-						//ASSIGN LIQ
-						//document.getElementById("mbcard_liq").innerHTML = "$" + liquidity.toLocaleString();
-						$("#mbcard_liq").empty().append('$'+liquidity.toLocaleString());
-						//ASSIGN USD PRICE
-						//document.getElementById("usdprice").innerHTML = "$" + tokenprice + " USD";
-						$("#usdprice").empty().append('$'+tokenprice+' USD');
-						
-					}else{
-						//no updates its not a number
-					}
-					//===============
-					//ASSIGN NVL - nvl - net value lost, is total sells - net buy backs its a number in WETH +ive or -ve
-					
-					
 			}catch(error){//close try/catch
-				console.log(error);
-				console.log("Problem fetching your share holding info..");
+				console.log("Metamask Locked");
 			}//close catch
+				
+			// F) CALCULATE PRICES
+			//PERFOMED HERE IN AWAIT
+			var circ_supply = MyLibrary.circ_supply; //Or more prudently: totalSupply - locked | zero addy  
+			var poolWeth_bal = window.poolWeth_bal;
+			var poolToken_bal = window.poolToken_bal;
+			var token_wethv = poolWeth_bal / poolToken_bal;
+				var token_wethvalue = token_wethv.toFixed(10); //fix to decimal number not scientific - directly
+			var token_usdvalue = token_wethvalue * window.ETHUSDprice;
+				var str_price = token_usdvalue.toString();
+				var tokenprice = Number(str_price.slice(0, 10));//trim to max 10 digits
+			var mcap = token_usdvalue * circ_supply;
+				var marketcap = Number(mcap.toFixed(2));//fix to decimal number not scientific
+			var liq = poolWeth_bal * window.ETHUSDprice * 2; //TOTAL LIQUIDITY x2 WETH
+				var liquidity = parseInt(liq.toFixed(2));
+			
+			console.log("Token Price weth: "+token_wethvalue);
+			console.log("Token Price USD: "+token_usdvalue);
+			//=================================================================================================================
+			// WE START ASSIGNING, THE FIRST ARE DEPENDED ON HAVING ETH PRICE, SO ON ERROR THEY DONT SHOW. THELATER SHOULD DISPLAY REGARDLESS
+			if (liquidity === parseInt(liquidity, 10)){//since liquidity uses both 2 points of possible failure: ETHprice & WETH balance
+				//ASSIGN MCAP
+				//document.getElementById("mbcard_cap").innerHTML = "$" + marketcap.toLocaleString();//toLocaleString adds commas
+				$("#mbcard_cap").empty().append('$'+marketcap.toLocaleString());
+				//ASSIGN LIQ
+				//document.getElementById("mbcard_liq").innerHTML = "$" + liquidity.toLocaleString();
+				$("#mbcard_liq").empty().append('$'+liquidity.toLocaleString());
+				//ASSIGN USD PRICE
+				//document.getElementById("usdprice").innerHTML = "$" + tokenprice + " USD";
+				$("#usdprice").empty().append('$'+tokenprice+' USD');
+				
+			}else{
+				//no updates its not a number
+			}
+			//===============
+			//ASSIGN NVL - nvl - net value lost, is total sells - net buy backs its a number in WETH +ive or -ve
 			
 		}else{//close type of ethereum
 			console.log('Install Metamask');
 		}
-	}else if(chainID !== "0x1"){//0x2a for Kovan testnet
+	}else if(chainID !== MyLibrary.network){//0x2a for Kovan testnet
 		console.log('wrong chain');
 		//hide wallet connect button parent
 		$('.walletpur').css('display', 'none');
@@ -737,13 +610,11 @@ $(document).on('click', '#show_claims', function(e){
 	var parsed_2 = JSON.parse(output);
 	if(parsed_2.hasOwnProperty('error')){//click or call again after a min timeout
 		console.log('error with result, retrying....');
-		claimsTimer = setInterval( function() {
-			rewardsClaimed();	//get Alchemyto give us result so we update global obj MyLibrary with real values	
-		}, 60000);
+		rewardsClaimed();	//get Alchemyto give us result so we update global obj MyLibrary with real values	
+		
 	}else{
-			process_reflections_todate(called_from,output);//process only from the global object value entered on the first query of rewardsClaimed()
+		process_claims_todate(called_from,output);//process only from the global object value entered on the first query of rewardsClaimed()
 	}
-	
 });
 
 //Pop up buybacks history
@@ -777,17 +648,8 @@ $(document).on('click', '#show_buybacks', function(e){
 
 //Claim Reflections
 $(document).on('click', '#call_reflections', function(e){
-	
-
-	if (window.ethereum) { // for modern DApps browser
-		web3 = new Web3(window.ethereum);
-		window.ethereum.enable();
-	}else if (web3) { // for old DApps browser
-		web3 = new Web3(web3.currentProvider);
-	}
-
-	
-	if(window.accounts_length <1){
+	//double check if wallet unlocked
+	if (accounts.length !== 0) {//check wallet from my Mylibrary.wallet as alternative
 		//locked
 		
 	}else{
