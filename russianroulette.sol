@@ -25,61 +25,64 @@ contract RussianRoulette is ERC20, Ownable {
     uint public _monthPlayers = 0;
     uint public backEndOdds = 3; //3 here, 2 front end
     uint public frontEndOdds = 2;
-    uint256 public rrday = 28;
-    uint256 internal _maxTransfer = 2;//1% final
+    uint256 public rrday = 26;
+    uint256 public _maxHoldings = 7500000 * 1e18; //2500000 final 0.5% as we will start with 1k liquidity
     uint256 public _buyRate = 15;
     uint256 public _sellRate = 20;
     uint256 public _rrwinnerRate = 10;
     uint256 public _reflectRate = 5;
-    uint256 public _discountRate = 3;//discount for helping us liquidate fee tokens when you buy from our website/proxy dex
+    uint256 public _discountRate = 5;//discount for helping us liquidate fee tokens when you buy from our website/proxy dex
+    uint256 public _serviceFee = 5;
     uint256 public _holders;
     uint256 public _ethReflectionBasis;
-    uint256 public _maxHoldings = 7500000 * 1e18; //2500000 final 0.5% as we will start with 1k liquidity
     uint256 public _totalServiceFees;
     uint256 public _totalStaked;//2of8 total types of tokens on contract at each given time
-    uint256 internal _totalDeleSell;//5of8
+    uint256 public _totalDeleSell;//5of8
     uint256 public _totalDeleLease;//6of8
     uint256 public _totalEthRebalanced;
-    uint256 public _totalEthReflected;
-    uint256 public _totalReflectionClaims;
+    uint256 public _totalReflectClaims;
     uint256 public _tradingStartBlock = 3041510;//mainnet 14400000
     uint256 internal _totalSupply = 0;
     uint256 public _totalBuyBackETH = 0;
     uint256 public _totalNVL_proxysell = 0;
     uint256 public _totalNVL_dexsell = 0;
 
-    address payable public _marketingWallet;
+    address payable public _rebalanceWallet;
     address payable public _treasuryWallet;
     address public _pairAddress;
-    address public _burnAddress = 0x000000000000000000000000000000000000dEaD;
+    address internal _burnAddress = 0x000000000000000000000000000000000000dEaD;
     address internal _bokkyPooBahAddr = 0x093A2489f18C342193D010b2A7771A8158A0d93B;
     IUniswapV2Router02 internal _router = IUniswapV2Router02(address(0));
 
+    bool internal _swapFees = true;
     bool internal _teamMint = false;
     bool internal _inSwap = false;
     bool internal _inLiquidityAdd = false;
     bool public _tradingActive = false;
     bool public _useWinnerFees = false;
-    bool internal _swapFees = true;
     
     mapping(address => bool) private _reflectionExcluded;
     mapping(address => bool) private _taxExcluded;
     mapping(address => bool) private _bot;
     mapping(address => bool) private _feeCollector;
+    mapping(address => bool) private _buyerStaker;
+    mapping(address => bool) private _feeLiquifier;
     mapping(address => uint256) private _balances;
     mapping(address => uint256) private _lastBuy;
     mapping(address => uint256) private _lastPlay;
     mapping(address => uint256) private _daysLeftToCool;
-    mapping(address => uint256) private _lastReflectionBasis;
     mapping(address => uint256) private _lastReflectionBasisShares;
     mapping(address => uint256) private _lastReflectionBasisStaked;
+    mapping(address => uint256) private _sharesLeaseAmnt;
     mapping(address => uint256) public _sellDelegation;
     mapping(address => uint256) public _shareDelegation;
-    mapping(address => uint256) private _sharesLeaseAmnt;
-    mapping(address => uint256) private _shareClaimsMapping;
+    mapping(address => uint256) public _totalEthReflectedBE;//*
+    mapping(address => uint256) public _totalEthReflectedSL;//*
+    mapping(address => uint256) public _totalEthReflectedST;//*
     mapping(address => uint256) public _totalEthReflectedWallet;
-    mapping(address => uint256) private _buyerStaker;
-    mapping(address => address) private _claimBeneficiary;
+    mapping(address => uint256) public _lastReflectionBasis;//*
+    mapping(address => address) public _claimBeneficiary;//*
+    mapping(address => myloansStruct) private _shareClaimsMapping;
     mapping(address => mysharesStruct) private _shareMapping;//store stracts
     mapping(address => mystakesStruct) private _stakeMapping;
     mapping(address => acptStruct) private _acptMapping;
@@ -115,7 +118,7 @@ contract RussianRoulette is ERC20, Ownable {
         addTaxExcluded(_burnAddress);
         addTaxExcluded(address(this));
 
-        _marketingWallet = payable(owner());
+        _rebalanceWallet = payable(owner());
         _treasuryWallet = treasuryWallet;
 
         IUniswapV2Router02 _uniswapV2Router = IUniswapV2Router02(0x7a250d5630B4cF539739dF2C5dAcb4c659F2488D); // 0x10ED43C718714eb63d5aA57B78B54704E256024E pancake test, 0xa6AD18C2aC47803E193F75c3677b14BF19B94883 SpookySwap test
@@ -145,34 +148,29 @@ contract RussianRoulette is ERC20, Ownable {
         }
     }
     function acpt(address account) public view returns (uint256) {
-        require(_acptMapping[account].tokenscost > 0,"no tokens bought");
         uint256 acpt_value = _acptMapping[account].tokenscost / _acptMapping[account].tokens;
         return acpt_value;
     }
-    function addReflectionETH() external payable {//donations welcome. holidays. etc
+    function addReflectionETH() public payable {//donations welcome. on holidays. etc
         require(msg.value > 0,"not zero");
         _ethReflectionBasis += msg.value;
     }
-    function circulatingSupply() external view returns (uint256) {
+    function circulatingSupply() public view returns (uint256) {
         uint256 _circSupply = _totalSupply - balanceOf(_burnAddress);
         return _circSupply;
     }
-    function currentRewardForWallet(address addr) external view returns(uint256) {
-        //even if you dont claim your eth will be there on contract waiting
-        uint256 owed = (_ethReflectionBasis - _lastReflectionBasis[addr]) * balanceOf(addr) / _totalSupply;
+    function currentRewardForWallet(address addr) public view returns(uint256) {//even if you dont claim your eth will be there on contract waiting
+        uint256 ethChange = _ethReflectionBasis - _lastReflectionBasis[addr];
+        uint256 owed = (ethChange * balanceOf(addr)) / _totalSupply;
         return owed;
     }
-    function maxTransferAllowed() public view returns (uint256) {
-        uint256 maxTxAmount = totalSupply() * _maxTransfer / 100;
-        return maxTxAmount;
-    }
-    function price() public view returns (uint256) {
+    function price() public view returns (uint256) {//ETH PER TOKEN NOT price0CumulativeLast APPROACH
         IUniswapV2Pair pair = IUniswapV2Pair(_pairAddress);
         (uint reserveA, uint reserveB,) = pair.getReserves();
         uint256 tokenprice = (reserveB * (10 ** uint256(18))) / reserveA;
         return tokenprice;
     }
-    function RussianRouletteWinners() external view returns(address[] memory) {
+    function RussianRouletteWinners() public view returns(address[] memory) {
         return _rrWinnersArray;
     }
     function fetchSwapAmounts(uint256 amountIn, uint swap) public view returns(uint256){
@@ -191,12 +189,8 @@ contract RussianRoulette is ERC20, Ownable {
     function isTaxExcluded(address account) public view returns (bool) {
         return _taxExcluded[account];
     }
-    function addTaxExcluded(address account) public onlyOwner() {
+    function addTaxExcluded(address account) public {
         _taxExcluded[account] = true;
-    }
-    function setSellTax(uint rate) external onlyOwner() {
-        assert( rate > 0 && rate <= 90); 
-        _sellRate = rate;
     }
     struct winningStruct {
         uint arrayKey;
@@ -219,10 +213,6 @@ contract RussianRoulette is ERC20, Ownable {
         _rrWinnersArray.pop();
         delete _winnerMapping[account];//destroy struct from mapping
     }
-    function setOdds(uint8 _odds) external onlyOwner() {
-        assert( _odds > 0 && _odds <= 3); //2 shortens the total odds to 4
-        backEndOdds = _odds;
-    }
     function playersCount() internal {
         uint datefrom_today = isTodayFirstDayOfMonth();
         //first player of new month
@@ -240,7 +230,6 @@ contract RussianRoulette is ERC20, Ownable {
         require((daysSincePlay - _daysLeftToCool[msg.sender]) >= 0,"on cooldown");//since wallet last played, month has reset
         require( balanceOf(msg.sender) > 1000000000000000000000, "hold at least 1000 tokens"); 
         require( _num > 0  && _num <= frontEndOdds, "1 to 2");
-        
         uint result = uint(keccak256(abi.encodePacked(block.difficulty, block.timestamp, _num))) % backEndOdds;//one in six total odds
         if(result == _num){
             addRRwinners(msg.sender);
@@ -250,28 +239,18 @@ contract RussianRoulette is ERC20, Ownable {
         //set last play time & days till month is over
         _daysLeftToCool[msg.sender] = daysLeftInMonth();//uint 1-30
         _lastPlay[msg.sender] = block.timestamp;//(then - last) > cooldownDays | in days
-        
         return result;
     }
     //bot accounts on uniswap trading from router
     function isBot(address account) internal view returns (bool) {
         return _bot[account];
     }
-    function addBot(address account) public onlyOwner() {
-        _addBot(account);
-    }
     function _addBot(address account) internal {
-        require(account != address(_router), "not router");
-        require(account != _pairAddress, "not pair");
         _bot[account] = true;
         _addReflectionExcluded(account);
     }
     //reflection excluded
-    function addReflectionExcluded(address account) public onlyOwner() {
-        _addReflectionExcluded(account);
-    }
     function _addReflectionExcluded(address account) internal {
-        require(!_reflectionExcluded[account], "Account must not be excluded");
         _reflectionExcluded[account] = true;
     }
     //fee taker
@@ -310,7 +289,7 @@ contract RussianRoulette is ERC20, Ownable {
         uint256 amount
     ) internal override {
         if (isTaxExcluded(sender) || isTaxExcluded(recipient)) {
-            if(_inLiquidityAdd || sender == address(this) || recipient == address(this) || recipient == _burnAddress || sender == _treasuryWallet || recipient == _treasuryWallet || sender == _marketingWallet || recipient == _marketingWallet){//No fees
+            if(_inLiquidityAdd || sender == address(this) || recipient == address(this) || recipient == _burnAddress || sender == _treasuryWallet || recipient == _treasuryWallet){//No fees
                 if(balanceOf(recipient) == 0){_holders +=1; }//before
                 _rawTransfer(sender, recipient, amount);
                 if(balanceOf(sender) == 0){_holders -= 1;}//after
@@ -322,29 +301,28 @@ contract RussianRoulette is ERC20, Ownable {
         }
 
         require(block.number >= _tradingStartBlock, "Trading starts at block 14400000");
-        require(!isBot(sender), "Sender locked as bot");
-        require(!isBot(recipient), "Recipient locked as bot");
-        uint256 maxTxAmount = totalSupply() * _maxTransfer / 100;//not % change it to 100 for actual % calc
-        require(amount <= maxTxAmount || _inLiquidityAdd || _inSwap || recipient == address(_router), "Exceeds max transaction amount");
+        require(!isBot(sender), "Sender locked as bot");//reciepient can receive but wont sell, dwindles circ supply
+        require(amount <= _maxHoldings || _inLiquidityAdd || _inSwap || recipient == address(_router), "Exceeds max transaction amount");
 
-        uint256 send = amount;
-        uint256 reflect;
-        uint256 marketing;
+        uint256 send = amount;  uint256 reflect;    uint256 rebalance;
         //indicates swap
         bool tokenSwap = false;
         bool buyCostAvg = false;
         if (sender == _pairAddress && _tradingActive) { // Buy, apply buy fee schedule
-            require(balanceOf(recipient) < _maxHoldings, "Reached max holdings allowed");
-            (send,reflect,marketing) = _getBuyTaxAmounts(amount);
-            
+            require(balanceOf(recipient)+amount < _maxHoldings, "Reached max holdings allowed");
+            (send,reflect,rebalance) = _getBuyTaxAmounts(amount);
+            if(_feeLiquifier[recipient]){//already taxed in ETH
+                (send,reflect,rebalance) = (amount,0,0);
+                _feeLiquifier[recipient] = false;
+            }
             //indicates swap
             tokenSwap = true;
             buyCostAvg = true;
-        } 
+        }
         if (recipient == _pairAddress && _tradingActive) {// Sell, apply sell fee schedule
-            (send,reflect,marketing) = _getSellTaxAmounts(amount);
+            (send,reflect,rebalance) = _getSellTaxAmounts(amount);
             if (_useWinnerFees){
-                (send,reflect,marketing) = _getWinnerTaxAmounts(amount);
+                (send,reflect,rebalance) = _getWinnerTaxAmounts(amount);
                 //reset winner status
                 if(sender != address(this)){removeRRwinner(sender);}
             }
@@ -355,16 +333,16 @@ contract RussianRoulette is ERC20, Ownable {
             _totalNVL_dexsell += nvlCur;
         }
         if(tokenSwap == false){ //Wallet to Wallet transfer
-            (send,reflect,marketing) = ((amount * 1 / 10000),0,0);//default..discourage transfer prevent RR cheating
+            (send,reflect,rebalance) = ((amount * 1 / 10000),0,0);//default..discourage transfer prevent RR cheating
             if (_feeCollector[sender] || _feeCollector[recipient]){
-                (send,reflect,marketing) = ((amount * 90 / 100),0,0);
+                (send,reflect,rebalance) = ((amount * (100 - _serviceFee) / 100),0,0);
                 //5% fee for FeeCollector contracts, to and from 10% net fee
-                _takeServiceFee(sender, (amount * 5 / 100));
+                _takeServiceFee(sender, (amount * _serviceFee / 100));
             }
             //reset
             tokenSwap = false;
         }
-        if(_buyerStaker[recipient] > 0){_buyerStaker[recipient] = 0; recipient = address(this);}//address(this) hackaround in swap
+        if(_buyerStaker[recipient]){_buyerStaker[recipient] = false; recipient = address(this);}//address(this) hackaround in swap
         //average cost per token per wallet purchase
         if(buyCostAvg){
             _acptMapping[recipient].tokenscost += send * price();
@@ -372,17 +350,15 @@ contract RussianRoulette is ERC20, Ownable {
         }
         //before balance check
         if(balanceOf(recipient) == 0){_holders +=1; }
-
+        //transfer
         _rawTransfer(sender, recipient, send);
-
         //after balance check
         if(balanceOf(sender) == 0){_holders -= 1;}
-        
-        if(marketing>0){//anypass
-            uint256 totalFee = marketing + reflect;//combine for first time
-            _takeSwapFees(sender, totalFee);
+        //take rebalance
+        if(rebalance>0){
+            _takeSwapFees(sender, rebalance + reflect);
         }
-
+        //trap bots on launch
         if (_tradingActive && block.number == _tradingStartBlock && !isTaxExcluded(tx.origin)) {
             if (tx.origin == address(_pairAddress)) {
                 if (sender == address(_pairAddress)) {
@@ -399,20 +375,20 @@ contract RussianRoulette is ERC20, Ownable {
         if (owner == _pairAddress || owner == address(_router)) return;
         require(!isBot(owner), "bot");
         require(!_reflectionExcluded[owner] || !_reflectionExcluded[msg.sender],"reflection excluded");
-        //even if you dont claim your eth will be there on contract waiting - basisDif = (_ethReflectionBasis - _lastReflectionBasis[owner])
         uint256 owed = (_ethReflectionBasis - _lastReflectionBasis[owner]) * balanceOf(owner) / _totalSupply;
-        _lastReflectionBasis[owner] = _ethReflectionBasis;
         if (owed > 0){ 
-            _totalEthReflectedWallet[owner] = _totalEthReflectedWallet[owner] + owed;
-            _totalReflectionClaims += owed;
+            _lastReflectionBasis[owner] = _ethReflectionBasis;//last point wallet claimed
+            _totalEthReflectedWallet[owner] += owed;//all claims for wallet
+            _totalReflectClaims += owed;//all claims for all
             if(beneficiary == 1){
+                _totalEthReflectedBE[msg.sender] += owed;
                 payable(msg.sender).transfer(owed);
                 emit ClaimReflection(owner, msg.sender, owed);
             }else{
                 owner.transfer(owed);
                 emit ClaimReflection(owner, owner, owed);
             }
-        }        
+        }
     }
     function claimReflection() public {
         _claimReflection(payable(msg.sender), 0);
@@ -421,39 +397,25 @@ contract RussianRoulette is ERC20, Ownable {
         require(_claimBeneficiary[owner] == msg.sender,"not beneficiary");
         _claimReflection(payable(owner), 1);
     }
-    function _swap(uint256 amount) internal {
+    function swapAll() public payable onlyOwner(){
+        uint256 tokens = _totalServiceFees;
         address[] memory path = new address[](2);
         path[0] = address(this);
         path[1] = _router.WETH();
-        _approve(address(this), address(_router), amount);
+        _approve(address(this), address(_router), tokens);
         uint[] memory returnAmount_ = _router.swapExactTokensForETH(
-            amount,
+            tokens,
             0,
             path,
             address(this),
             block.timestamp
         );
-        /* 
-        //all fees collected to be placed in _totalServiceFees var
-        //lose takeMarketing and takeReflection functions
-        */
-        _totalServiceFees -= amount;
-        _totalEthRebalanced += returnAmount_[1] * 2/3;//marketing is 10/15 of trade value..15*_totalEthRebalanced/10=trade value frontend
-        _ethReflectionBasis += returnAmount_[1] - (returnAmount_[1] * 2/3);//trade value - rbw eth
-        _totalEthReflected += returnAmount_[1] - (returnAmount_[1] * 2/3);
+        //update: no reflections as these are fee tokens belonging to rbw
+        _totalEthRebalanced += returnAmount_[1];
+        _totalServiceFees -= tokens;
         if (returnAmount_[1] > 0) {
-             _marketingWallet.transfer(returnAmount_[1] * 2/3);//only transfer RBW amount and leave reflections
-        }else{revert("swap went wrong");}
-
-    }
-    function swapAll() public onlyOwner(){
-        uint256 maxTxAmount = totalSupply() * _maxTransfer / 100;
-        if(_totalServiceFees >= maxTxAmount){
-            _totalServiceFees = maxTxAmount;
-        }
-        if ( !_inSwap ) {
-            _swap(_totalServiceFees);
-        }
+             _rebalanceWallet.transfer(returnAmount_[1]);//only transfer RBW amount and leave reflections
+        }else{revert("failed");}
     }
     //Swap user tokens for eth through our contract, Uniswap has a 49% limit so we work around it here
     //Bandits (those who sell unscheduled / off the RR calender) suffer 90% tax. The more bandits the merrier for LP
@@ -468,22 +430,18 @@ contract RussianRoulette is ERC20, Ownable {
 
         _sellDelegation[addr] -= amount;//before transfer
         uint musi = isTodayFirstDayOfMonth();
-        uint256 marketing;
-        uint256 amountSwap;
-        (amountSwap,,marketing) = _getSellTaxAmounts(amount);
+        (uint256 amountSwap,,uint256 rebalance) = _getSellTaxAmounts(amount);
         if(musi == rrday && _winnerMapping[addr].time != 0){//winner
-            (amountSwap,,marketing) = _getWinnerTaxAmounts(amount);
-            //reset winner status
+            (amountSwap,,rebalance) = _getWinnerTaxAmounts(amount);
             removeRRwinner(addr);
         }
         //THE MOST DEFINING PART THAT AFFECTS THE WHOLE PROJECT IS THIS (simple 1 line of below)
-        //If we send to marketing that means we will inflate the LP on each bandit sell (90% tax sell)
-        //Though bandit sells will obviously be slow, meaning buyers will likely scoup them up thru Proxy buying (not uniswap buying)
+        //If we liquidate fee tokens in LP that means we will inflate the LP on each bandit sell (90% tax)
+        //Though bandit sells will obviously be slow, meaning buyers will likely scoup them up thru Proxy buys (not uniswap)
         //Proxy buying is meant to convert all tokens to ETH without taking from the LP
         //Whilst burning the tokens instead eliminates Unscheduled Sell Threats to the LP one by one (more bandits the merrier)
-        //Alt argument for not burning would be assigning the tokens to _totalServiceFees ensuring they are only liquidated from new buys
         //Burning chokes the crucial fee collection mechanism for RBWallet that allows the DAO to finance its sustainability
-        _totalServiceFees += marketing;
+        _totalServiceFees += rebalance;
         /*---------------------------------------------------*/
         _approve(address(this), address(_router), amountSwap);
         uint[] memory returnAmount_ = _router.swapExactTokensForETH(
@@ -494,22 +452,15 @@ contract RussianRoulette is ERC20, Ownable {
             block.timestamp + swapdeadline
         );
         if(returnAmount_[1] >0){
-            _totalNVL_proxysell += uint256(returnAmount_[1]);//last item is output
+            _totalNVL_proxysell += uint256(returnAmount_[1]);
             emit BanditSell(addr, amountSwap, returnAmount_[1]);
         }else{revert("zero returned");}
         
     }
     function swapForUser(uint swapdeadline) public {//bypassing Uniswap tax limitations
         require(_sellDelegation[msg.sender] > 0, "no delegated");
-        uint256 maxTxAmount = _totalSupply * _maxTransfer / 100;
-        uint256 walletTokenBalance = _sellDelegation[msg.sender];
-
-        if(walletTokenBalance >= maxTxAmount){
-            walletTokenBalance = maxTxAmount;
-        }
-
         if ( !_inSwap ) {
-            _swapSellForWallet(payable(msg.sender), walletTokenBalance, swapdeadline);
+            _swapSellForWallet(payable(msg.sender), _sellDelegation[msg.sender], swapdeadline);
         }
     }
     function withdrawAll() public onlyOwner() {
@@ -570,13 +521,11 @@ contract RussianRoulette is ERC20, Ownable {
             deadline
         );
         uint256 outputTokenCount = uint256(tokenAmount_[tokenAmount_.length - 1]);
-        
         if(outputTokenCount >0){
             _totalBuyBackETH += msg.value;//for tokens burn we simply query deadAdd balance
             emit BuyBack(msg.sender, msg.value, outputTokenCount);
             emit Burn(outputTokenCount);
-        }else{revert("zero tokens received");}
-        
+        }else{revert("no tokens");}
         return outputTokenCount;
     }
     /*
@@ -593,14 +542,12 @@ contract RussianRoulette is ERC20, Ownable {
         bool sixmonther;
     }
     function _buyAndStake(uint stakedays, uint swapdeadline)external payable{
-        require(msg.value > 0,"more than zero");
-        //accept eth deposit & buy
-         _buyerStaker[msg.sender] = 1000;//initial, needed for recipient hack in raw transfer, LP as sender, recipient is now address(this) - set under _transfer if(_buyerStaker[recipient]>0)
-        (uint256 send, ) = _buyGuns(swapdeadline);
+         _buyerStaker[msg.sender] = true;//initial, needed for recipient hack in raw transfer, LP as sender, recipient is now address(this) - set under _transfer if(_buyerStaker[recipient]>0)
+        (uint256 send, ,) = _buyGuns(swapdeadline);
         if( send > 0){
-            uint256 expiration = addDays(stakedays);//set expiry date
+            uint256 expiration = addDays(stakedays);
             if(_stakeMapping[msg.sender].amount > 0){//can add tokens whether expired or not
-                _stakeMapping[msg.sender].amount += send;//add to existing
+                _stakeMapping[msg.sender].amount += send;//add to existing..but it changes expiry date
             }else{
                 _stakeMapping[msg.sender].amount = send;
             }
@@ -615,60 +562,86 @@ contract RussianRoulette is ERC20, Ownable {
             revert("no tokens bought");
         }
     }
-    
-    function _buyGuns(uint swapdeadline) public payable lockSwap returns (uint256 outputTokenCount, uint256 requiredTokens) {
-        require(!isBot(msg.sender) && !isBot(tx.origin), "wallet locked as bot");
-        require(balanceOf(msg.sender) < _maxHoldings, "Reached max holdings allowed");
-
+    function _buyGuns(uint swapdeadline) public payable lockSwap returns (uint256 outputTokenCount, uint256 requiredTokens, uint256 balancePending) {
+        require(msg.value > 0,"more than zero");
+        require(!isBot(tx.origin), "wallet locked as bot");
         address[] memory path = new address[](2);
         path[0] = _router.WETH();
         path[1] = address(this);
-        /*** ETH FEE TAKING START ***/
-        uint256 buyETH;
-        uint256 reflectETH;
-        uint256 marketingETH;
-        (buyETH, reflectETH, marketingETH) = _getBuyTaxAmounts(msg.value);
-        _ethReflectionBasis += reflectETH;
-        _totalEthRebalanced += marketingETH;
-        /*** ETH FEE TAKING END ***/
-
+        //ETH FEE TAKING 
+        _feeLiquifier[msg.sender] = true;//tax free, tokens send from LP,if any
+        (uint256 buyETH, uint256 reflectETH, uint256 rebalanceETH) = _getBuyTaxAmounts(msg.value);
+        //check values
         uint256 swap_price = price();
         requiredTokens = fetchSwapAmounts(buyETH, 1);
-        if(_totalServiceFees > requiredTokens){//we are a go to liquidate feetokens & update balances accordingly
-            uint256 bonusedAmount = requiredTokens * (100 + _discountRate) / 100;//bonus
-            require(bonusedAmount < _totalServiceFees, "not enough for bonus");
-            _rawTransfer(address(this), msg.sender, bonusedAmount);
-            outputTokenCount = bonusedAmount;
-            //we have taken from Fees pool, update
-            _totalServiceFees -= bonusedAmount;
-            emit BUYft(msg.sender, bonusedAmount);
-        }else{//not enough, buy from lp
+        require(balanceOf(msg.sender)+requiredTokens < _maxHoldings, "Reached max holdings allowed");
+        //proceed
+        uint256 bonusedAmount = requiredTokens * (100 + _discountRate) / 100;//bonus
+        uint256 tokensTransfer = 0;
+        if(_totalServiceFees > 0){
+            if(_totalServiceFees > bonusedAmount){
+                tokensTransfer = bonusedAmount;
+            }else if(_totalServiceFees > requiredTokens && _totalServiceFees < bonusedAmount){
+                tokensTransfer = requiredTokens;
+                uint256 discounted = requiredTokens * (100 - _discountRate) / 100;//factor bonus into given amount to get new balance needed
+                balancePending = requiredTokens - discounted;
+            }else if(_totalServiceFees < requiredTokens){//user should check if its worth it
+                tokensTransfer = _totalServiceFees;
+                uint256 discounted = _totalServiceFees * (100 - _discountRate) / 100;//factor bonus into given amount to get new balance needed
+                balancePending = requiredTokens - discounted;
+            }
+        }else{//straight LP buy, bonus not available
+            balancePending = requiredTokens;
+        }
+        if(balancePending > 0){
+            //buy whats pending from UNISWAP LP
+            //how much eth to use calculated based on requiredTokens not bonus
+            uint256 inputETH = buyETH * balancePending/requiredTokens;
+            buyETH -= inputETH;//adjust starting eth balance
             uint256 deadline = block.timestamp + swapdeadline;
-            uint[] memory tokenAmount_ = _router.swapExactETHForTokens{value: buyETH}(
-                0, //always succeeds
+            uint[] memory tokenAmount_ = _router.swapExactETHForTokens{value: inputETH}(
+                0,
                 path, 
-                payable(msg.sender), //buyNstake sets recipient to address(this) on return transfer from LP, 
+                payable(msg.sender), //_buyerStaker re-routes
                 deadline
             );
-            outputTokenCount = uint256(tokenAmount_[tokenAmount_.length - 1]);//last item, returned array always has 2 amounts
+            outputTokenCount += uint256(tokenAmount_[tokenAmount_.length - 1]);
         }
+        if(tokensTransfer > 0 && _buyerStaker[msg.sender]== false){
+            _rawTransfer(address(this), msg.sender, tokensTransfer);
+            //we have taken from Fees pool, update
+            _totalServiceFees -= tokensTransfer;
+            outputTokenCount += tokensTransfer;
+            emit BUYft(msg.sender, tokensTransfer);
+        }
+        //success or revert to prevent losing bonuses
         if(outputTokenCount == 0){revert("zero tokens received");}
         //update acpt for both scenarios
         _acptMapping[msg.sender].tokenscost += outputTokenCount * swap_price;
         _acptMapping[msg.sender].tokens += outputTokenCount;
-
-        if(_totalServiceFees > requiredTokens){//liquidated fee tokens, so collect eth
-            payable(_marketingWallet).transfer(buyETH);
+        //liquidated fee tokens, so collect eth
+        if(tokensTransfer > 0){
+            rebalanceETH += buyETH;//batch rebalanceETH & buyETH transfer
         }
-        payable(_marketingWallet).transfer(marketingETH);//fee, only transfer RBW eth, leave reflections eth on contract
-        return (outputTokenCount, requiredTokens);
+        //take fees: reflection + rbw
+        _ethReflectionBasis += reflectETH;
+        _totalEthRebalanced += rebalanceETH;
+        //fee, only transfer RBW eth, leave reflections eth on contract
+        payable(_rebalanceWallet).transfer(rebalanceETH);
+        return (outputTokenCount, requiredTokens, balancePending);
     }
     function unstake() public{
         require(_stakeMapping[msg.sender].amount > 0,"nothing to unstake");
         require(_stakeMapping[msg.sender].expiry < block.timestamp,"not expired yet");
         if(_stakeMapping[msg.sender].sixmonther == true){addRRwinners(msg.sender);}
-        _totalStaked -= _stakeMapping[msg.sender].amount;//update before transfer
-        delete _stakeMapping[msg.sender];//struct destroy from mapping before transfer
+        //avoid double claiming when they return to wallet, nullify rewards claimed
+        //if you didnt claim all it retains & continue claiming in wallet. Nothing lost
+        _lastReflectionBasis[msg.sender] += _totalEthReflectedST[msg.sender];
+        //reset values
+        _totalEthReflectedST[msg.sender] = 0;
+        //update & destroy struct then transfer
+        _totalStaked -= _stakeMapping[msg.sender].amount;
+        delete _stakeMapping[msg.sender];
         _rawTransfer(address(this), msg.sender, _stakeMapping[msg.sender].amount);
         emit Unstaked(msg.sender, _stakeMapping[msg.sender].amount);
     }
@@ -685,19 +658,18 @@ contract RussianRoulette is ERC20, Ownable {
         _lastReflectionBasisStaked[msg.sender] = _ethReflectionBasis;
         if (reward == 0) { return 0;}
         payable(msg.sender).transfer(reward);
-        _totalReflectionClaims += reward;
+        _totalEthReflectedST[msg.sender] += reward; _totalReflectClaims += reward;
         emit ClaimReflectionStake(msg.sender, address(this), reward);
         return reward;
     }
-
     // Defining shareleasing struct
     struct mysharesStruct {
         uint256 amount;
-        uint256 amountETH;//set to zero when someone takes up lease as the ETH is paid to lessor immidietly..update reflection basis from time loan was taken up
+        uint256 amountETH;
         uint256 matchedETH;
         uint256 duration;
         uint256 expiry;
-        address subscriber;//updated when someone take up the lease
+        address subscriber;
         uint index;
     }
     function createShareLease(uint256 tokens, uint256 ethRequired, uint256 lease_days) external {
@@ -714,24 +686,21 @@ contract RussianRoulette is ERC20, Ownable {
          _shareMapping[msg.sender].index = indexx;
          emit LeaseList(msg.sender, ethRequired, tokens);
     }
-    function isLeaseTaken(address addr) public view returns(bool){
-        if(_shareMapping[addr].matchedETH > 0){//alt: === 0) revert();
-            return true;
-        }else{// if matched == 0, default, return false
-            return false;
-        } 
-    }
-    function concludeShareLease()external {//lessor only can conclude expired or untaken lease
+    function concludeShareLease()external {
         require(block.timestamp >= _shareMapping[msg.sender].expiry, "lease still running");
         require(_sharesLeaseAmnt[msg.sender] > 0 && _shareMapping[msg.sender].amount > 0,"no tokens left");
-        assert(_sharesLeaseAmnt[msg.sender] == _shareMapping[msg.sender].amount);//match what you taking back & what you put in
-
+        assert(_sharesLeaseAmnt[msg.sender] == _shareMapping[msg.sender].amount);
         //get token amount in lease from struct
-        _shareDelegation[msg.sender] += _shareMapping[msg.sender].amount;//restore tokens
+        _shareDelegation[msg.sender] += _shareMapping[msg.sender].amount;
         _sharesLeaseAmnt[msg.sender] -= _shareMapping[msg.sender].amount;
-
-        delete _shareMapping[msg.sender];//destroy struct from mapping
-        _lessorsArray[_shareMapping[msg.sender].index] = _lessorsArray[_lessorsArray.length-1];//wallet user to last in array
+        //avoid double claiming when they return to wallet, nullify rewards claimed by lessee
+        //if lessee didnt claim all we retain in last_basis, continue claims from wallet
+        _lastReflectionBasis[msg.sender] += _totalEthReflectedSL[_shareMapping[msg.sender].subscriber];
+        //reset values
+        _totalEthReflectedSL[_shareMapping[msg.sender].subscriber] = 0;
+        delete _shareClaimsMapping[_shareMapping[msg.sender].subscriber];
+        delete _shareMapping[msg.sender];//destroy struct
+        _lessorsArray[_shareMapping[msg.sender].index] = _lessorsArray[_lessorsArray.length-1];
         _lessorsArray.pop();
         if(_shareMapping[msg.sender].expiry >0){
             emit LeaseEnd(msg.sender, _shareMapping[msg.sender].amount, block.timestamp);
@@ -739,71 +708,93 @@ contract RussianRoulette is ERC20, Ownable {
             emit LeaseUnlist(msg.sender, _shareMapping[msg.sender].amount, block.timestamp);
         }        
     }
-    function takeupShareLease(address payable lessorwallet)external payable{//lessee
-        require(_shareMapping[lessorwallet].amountETH == msg.value && msg.value > 0,"send exact ETH asked");
-        require(!isLeaseTaken(lessorwallet),"lease already taken");
+    struct myloansStruct{
+        address lessor;
+        uint256 amount;
+        uint256 date;
+    }
+    function takeupShareLease(address payable lessorwallet)external payable{
+        require(_shareClaimsMapping[msg.sender].amount == 0,"one at a time");
+        require(_shareMapping[lessorwallet].amountETH == msg.value && msg.value > 0,"send exact ETH");
+        require(_shareMapping[lessorwallet].matchedETH == 0,"lease taken");
         //pay first money wont sit on contract
         uint256 net_amountETH = (msg.value)*90/100;
         lessorwallet.transfer(net_amountETH);//take 10% maker fee from both parties, lessor now, lessee on claims
-        _marketingWallet.transfer(msg.value - net_amountETH);//fee
+        _rebalanceWallet.transfer(msg.value - net_amountETH);//fee
         //accept eth deposit & record it
         _shareMapping[lessorwallet].expiry = addDays(_shareMapping[lessorwallet].duration);
         _shareMapping[lessorwallet].matchedETH = msg.value;
         _shareMapping[lessorwallet].subscriber = msg.sender;
         //take rights to claim rewards due for tokens
-        _shareClaimsMapping[msg.sender] = _shareMapping[lessorwallet].amount;
+        _shareClaimsMapping[msg.sender].amount = _shareMapping[lessorwallet].amount;
+        _shareClaimsMapping[msg.sender].lessor = lessorwallet;
+        _shareClaimsMapping[msg.sender].date = block.timestamp;
         //track rewards due for tokens leased
         _lastReflectionBasisShares[msg.sender] = _ethReflectionBasis;
-        
         emit LeaseStart(lessorwallet, msg.sender, _shareMapping[lessorwallet].amount);
     }
     function _checkShareReflection(address addr) view public returns (uint256) {
-        require(_shareClaimsMapping[msg.sender]>0,"no shares to claim from");
+        require(_shareClaimsMapping[msg.sender].amount>0,"no shares to claim");
         require(_shareMapping[addr].subscriber == msg.sender,"not subscriber");
-        uint256 reward = (_ethReflectionBasis - _lastReflectionBasisShares[msg.sender]) * _shareClaimsMapping[msg.sender] / _totalSupply;
+        uint256 reward = (_ethReflectionBasis - _lastReflectionBasisShares[msg.sender]) * _shareClaimsMapping[msg.sender].amount / _totalSupply;
         return reward;
     }
+    //lessee Checks, returns: lessor, tokens, ETHasked, taken date, expiry date
+    function _checkOccupiedLease() view public returns (address, uint256, uint256, uint256, uint256) {
+        return (_shareClaimsMapping[msg.sender].lessor, _shareClaimsMapping[msg.sender].amount, _shareMapping[_shareClaimsMapping[msg.sender].lessor].matchedETH, _shareClaimsMapping[msg.sender].date, _shareMapping[_shareClaimsMapping[msg.sender].lessor].expiry);
+    }
     function claimShareReflection(address payable lessorwallet) public returns(uint256) {
-        require(!isBot(msg.sender) && !isBot(tx.origin), "wallet locked as bot");
+        require(!isBot(msg.sender) && !isBot(tx.origin), "locked as bot");
+        require(block.timestamp <= _shareMapping[lessorwallet].expiry, "expired");//cant claim once expired
         uint256 reward = _checkShareReflection(lessorwallet);
 
         _lastReflectionBasisShares[msg.sender] = _ethReflectionBasis;//resets when new lease is taken
         if (reward == 0) { return 0;}
+        _totalEthReflectedSL[msg.sender] += reward; _totalReflectClaims += reward;
         uint256 net_reward = (reward)*90/100;//less service fee
         payable(msg.sender).transfer(net_reward);
-        _marketingWallet.transfer(reward - net_reward);
+        _rebalanceWallet.transfer(reward - net_reward);
         emit ClaimReflectionLease(msg.sender, lessorwallet, net_reward);
         return net_reward;
     }
-    function getShareLeases() view external returns (address[] memory) {
+    function getShareLeases() view public returns (address[] memory) {
         return _lessorsArray;
     }
-    function getShareLease(address _address) view external returns (uint256, uint256, uint256, uint256, address) {
-         return (_shareMapping[_address].amount, _shareMapping[_address].amountETH, _shareMapping[_address].duration, _shareMapping[_address].expiry, _shareMapping[_address].subscriber);
+    //lessor Checks, returns: tokens, ETHasked, ETHclaimed, duration, datetaken, expiry, subscriber
+    function getShareLease(address _address) view public returns (uint256, uint256, uint256, uint256, uint256, uint256, address) {
+         return (_shareMapping[_address].amount, _shareMapping[_address].amountETH, _totalEthReflectedSL[_shareMapping[_address].subscriber], _shareMapping[_address].duration, _shareClaimsMapping[_shareMapping[_address].subscriber].date, _shareMapping[_address].expiry, _shareMapping[_address].subscriber);
     }
-    function getStakeData(address _address) view external returns (uint256, uint256, uint256) {
+    function getStakeData(address _address) view public returns (uint256, uint256, uint256) {
         return (_stakeMapping[_address].amount, _stakeMapping[_address].duration, _stakeMapping[_address].expiry);
     }
-    function _getBuyTaxAmounts(uint256 amount)internal view  returns (uint256 send, uint256 reflect,  uint256 marketing){
+    function _getBuyTaxAmounts(uint256 amount)internal view  returns (uint256 send, uint256 reflect,  uint256 rebalance){
         uint256 sendRate = 100 - _buyRate;
         send = (amount * sendRate) / 100; //send 85%
         reflect = (amount * _reflectRate) / 100; //take 5% reflection
-        marketing = amount - send - reflect; //10% thats left goes to RBW
-        assert(send + reflect + marketing == amount);
+        rebalance = amount - send - reflect; //10% thats left goes to RBW
+        assert(send + reflect + rebalance == amount);
     }
-    function _getSellTaxAmounts(uint256 amount) internal view returns (uint256 send, uint256 reflect, uint256 marketing){
+    function _getSellTaxAmounts(uint256 amount) internal view returns (uint256 send, uint256 reflect, uint256 rebalance){
         uint256 sendRate = 100 - _sellRate;
         assert(sendRate >= 0);
         send = (amount * sendRate) / 100;
-        marketing = amount - send;
-        assert(send + reflect + marketing == amount);
+        rebalance = amount - send;
+        assert(send + reflect + rebalance == amount);
     }
-    function _getWinnerTaxAmounts(uint256 amount)internal view returns (uint256 send,  uint256 reflect,  uint256 marketing){
+    function _getWinnerTaxAmounts(uint256 amount)internal view returns (uint256 send,  uint256 reflect,  uint256 rebalance){
         uint256 sendRate = 100 - _rrwinnerRate;
         send = (amount * sendRate) / 100;
-        marketing = amount - send;
-        assert(send + reflect + marketing == amount);
+        rebalance = amount - send;
+        assert(send + reflect + rebalance == amount);
     }
+    /*function not found issues in front-end on public mappings, so getter
+    function getEthReflected(address account, uint id) public view returns (uint256 amount) {
+        if(id==1){return _totalEthReflectedWallet[account];}
+        if(id==2){return _totalEthReflectedBE[account];}//2 BE
+        if(id==3){return _totalEthReflectedSL[account];}//3 SL
+        if(id==4){return _totalEthReflectedST[account];}//4 ST
+    }
+    */
     // modified from OpenZeppelin ERC20
     function _rawTransfer(
         address sender,
@@ -819,11 +810,21 @@ contract RussianRoulette is ERC20, Ownable {
             _subtractBalance(sender, amount);
         }
         _addBalance(recipient, amount);
-
         emit Transfer(sender, recipient, amount);
     }
-    function setMaxTransfer(uint256 maxTransfer) external onlyOwner() {
-        _maxTransfer = maxTransfer;
+    function setSellTax(uint rate) external onlyOwner() {
+        assert( rate > 0 && rate <= 90); 
+        _sellRate = rate;
+    }
+    function setOdds(uint8 _odds) external onlyOwner() {
+        assert( _odds > 0 && _odds <= 3); //2 shortens the total odds to 4
+        backEndOdds = _odds;
+    }
+    function setMaxHoldings(uint256 maxHoldings) external onlyOwner() {
+        _maxHoldings = maxHoldings;
+    }
+    function setServiceFee(uint fee) external onlyOwner() {
+        _serviceFee = fee;
     }
     function setFeeLiqDiscount(uint256 discountFee) external onlyOwner() {
         _discountRate = discountFee;
@@ -831,8 +832,8 @@ contract RussianRoulette is ERC20, Ownable {
     function setTreasuryWallet(address payable _treasury) external onlyOwner(){
         _treasuryWallet = _treasury;
     }
-    function setMarketingWallet(address payable _marketing) external onlyOwner(){
-        _marketingWallet = _marketing;
+    function setRebalanceWallet(address payable _rebalance) external onlyOwner(){
+        _rebalanceWallet = _rebalance;
     }
     function totalSupply() public view override returns (uint256) {
         return _totalSupply;
