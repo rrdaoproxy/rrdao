@@ -1,12 +1,18 @@
 #hodl_game{
-	width:500px;
-	font:14px monospace, sans-serif, "Helvetica Neue", Helvetica, "Liberation Sans" !important;
-	margin: 0px auto !important;
+	position:relative;
+	display:inline-block;
+	vertical-align: middle;
+	width:100%;
+	max-width:500px;
+	min-width:200px;
+	margin: 0 !important;
 	padding: 0 !important;
+	overflow:visible !important;
+	
+	font:14px monospace, sans-serif, "Helvetica Neue", Helvetica, "Liberation Sans" !important;
 	color: #000 !important;
 	background: #683c2c !important;
 	background-image: linear-gradient(to top, #463e3c, #4d3e3a, #543e37, #5a3d34, #603d31, #633d2f, #653c2e, #683c2c, #683c2c, #683c2c, #683c2c, #683c2c) !important; /* light middle */
-
 }
 .spin{
 	margin:10px auto;
