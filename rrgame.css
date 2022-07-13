@@ -76,7 +76,7 @@
 	z-index:100;
 }
 .loader_final {
-  animation: spin_final 10s step-end alternate infinite;
+  animation: spin_final 10s step-end alternate 3;
   animation-play-state:play;
   background: #7f919b;
   border-radius: 50%;
@@ -85,7 +85,7 @@
 }
 
 .loader_wait {
-  animation: spin 3.5s ease-in-out alternate infinite;
+  animation: spin 3.5s ease-in-out alternate 3;
   animation-play-state:paused;
   animation-delay: -.1s; /* 0.5 is wow, */
   background: #7f919b;
@@ -95,7 +95,7 @@
 }
 
 .loader {
-  animation: spin 3.7s ease-in-out alternate infinite; /* 3.7 seconds to complete, in sync with 3.1 seconds for Javascript timer */
+  animation: spin 3.7s ease-in-out alternate 3; /* 3.7 seconds to complete, in sync with 3.1 seconds for Javascript timer */
   animation-iteration-count: 10;
   animation-play-state: play;
   animation-delay: -.1s; /* 0.5 is wow, */
@@ -137,7 +137,7 @@
 }
 
 .inner {
-  animation: load 3.5s ease-in-out alternate 10;
+  animation: load 3.5s ease-in-out alternate 3;
   border: solid 1.5px #465b5e;
   border-radius: 50%;
   height: 1.75em;
@@ -145,7 +145,7 @@
   z-index: 1;
 }
 .inner_wait{
-  animation: load 3.5s ease-in-out alternate 10;
+  animation: load 3.5s ease-in-out alternate 3;
   animation-play-state:paused;
   border: solid 1.5px #465b5e;
   border-radius: 50%;
@@ -154,7 +154,7 @@
   z-index: 1;
 }
 .inner_final{
-  animation: load_final 15s step-end alternate infinite; /* 30 seconds loads the bullet late, after it stops rotating */
+  animation: load_final 15s step-end alternate 3; /* 30 seconds loads the bullet late, after it stops rotating */
   animation-play-state:play;
   border: solid 1.5px #465b5e;
   border-radius: 50%;
